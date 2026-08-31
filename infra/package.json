@@ -1,0 +1,23 @@
+{
+  "name": "csg-attendance-infra",
+  "version": "0.1.0",
+  "bin": {
+    "csg-attendance-infra": "bin/app.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "aws-cdk": "^2.150.0",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "@aws-amplify/graphql-api-construct": "^1.14.0",
+    "aws-cdk-lib": "^2.150.0",
+    "constructs": "^10.3.0",
+    "source-map-support": "^0.5.21"
+  }
+}
