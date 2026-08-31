@@ -3,3 +3,7 @@ cdk.out/
 *.log
 .env
 .DS_Store
+
+frontend/node_modules/
+
+.vscode/
