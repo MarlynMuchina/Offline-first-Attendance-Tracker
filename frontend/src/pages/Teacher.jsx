@@ -1,14 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
-import { getCurrentUser } from 'aws-amplify/auth'
+import { getCurrentUser, signOut } from 'aws-amplify/auth'
+import { db } from '../lib/db'
+import { startSyncEngine, syncPendingAttendance } from '../lib/syncEngine'
 
 const client = generateClient()
 
-// TODO: replace with real school/class context once Admin module exists
-// (teacher-to-class assignment isn't built yet, so this stays hardcoded
-// for now — tracked as a known gap, not an oversight)
-const SCHOOL_ID = 'school-001'
-const CLASS_ID = 'class-form2east'
+const CLASS_ID = 'class-form2east' // TODO: replace with real class context once Admin module exists
 
 const listStudentsQuery = /* GraphQL */ `
   query ListStudents($classId: ID!) {
@@ -17,44 +16,8 @@ const listStudentsQuery = /* GraphQL */ `
         id
         first_name
         last_name
+        class_id
       }
-    }
-  }
-`
-
-const listAttendanceForDateQuery = /* GraphQL */ `
-  query ListAttendance($classId: ID!, $date: String!) {
-    listAttendanceRecords(
-      filter: { class_id: { eq: $classId }, date: { eq: $date } }
-    ) {
-      items {
-        id
-        student_id
-        status
-        marked_at
-      }
-    }
-  }
-`
-
-const createAttendanceRecord = /* GraphQL */ `
-  mutation CreateAttendanceRecord($input: CreateAttendanceRecordInput!) {
-    createAttendanceRecord(input: $input) {
-      id
-      student_id
-      status
-      marked_at
-    }
-  }
-`
-
-const updateAttendanceRecord = /* GraphQL */ `
-  mutation UpdateAttendanceRecord($input: UpdateAttendanceRecordInput!) {
-    updateAttendanceRecord(input: $input) {
-      id
-      student_id
-      status
-      marked_at
     }
   }
 `
@@ -62,93 +25,106 @@ const updateAttendanceRecord = /* GraphQL */ `
 const today = () => new Date().toISOString().split('T')[0]
 
 export default function Teacher() {
+  const navigate = useNavigate()
   const [students, setStudents] = useState([])
-  const [records, setRecords] = useState({}) // keyed by student_id
+  const [queueRecords, setQueueRecords] = useState([])
   const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState('')
-  const [currentUser, setCurrentUser] = useState(null)
-  const [savingId, setSavingId] = useState(null) // per-row save indicator
-  const [saveErrors, setSaveErrors] = useState({}) // keyed by student_id
+  const [isOnline, setIsOnline] = useState(navigator.onLine)
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    setLoadError('')
+  const [syncing, setSyncing] = useState(false)
+
+  // Load roster: try network first, fall back to local cache if offline.
+  const loadStudents = useCallback(async () => {
     try {
-      const user = await getCurrentUser()
-      setCurrentUser(user)
-
-      const [studentsRes, attendanceRes] = await Promise.all([
-        client.graphql({ query: listStudentsQuery, variables: { classId: CLASS_ID } }),
-        client.graphql({
-          query: listAttendanceForDateQuery,
-          variables: { classId: CLASS_ID, date: today() },
-        }),
-      ])
-
-      setStudents(studentsRes.data.listStudents.items)
-
-      const recordMap = {}
-      attendanceRes.data.listAttendanceRecords.items.forEach((r) => {
-        recordMap[r.student_id] = r
+      const res = await client.graphql({
+        query: listStudentsQuery,
+        variables: { classId: CLASS_ID },
       })
-      setRecords(recordMap)
+      const fresh = res.data.listStudents.items
+      await db.students.bulkPut(fresh)
+      setStudents(fresh)
     } catch (err) {
-      console.error('Failed to load roster/attendance:', err)
-      setLoadError(err.message || 'Failed to load data from server')
-    } finally {
-      setLoading(false)
+      console.warn('Could not fetch roster from server, using local cache:', err.message)
+      const cached = await db.students.where('class_id').equals(CLASS_ID).toArray()
+      setStudents(cached)
     }
   }, [])
 
+  // Load today's queue entries for this class from Dexie (always local, always works).
+  const loadQueue = useCallback(async () => {
+    const records = await db.attendanceQueue
+      .where('class_id')
+      .equals(CLASS_ID)
+      .and((r) => r.date === today())
+      .toArray()
+    setQueueRecords(records)
+  }, [])
+
   useEffect(() => {
-    loadData()
-  }, [loadData])
+  async function init() {
+    setLoading(true)
+    await loadStudents()
+    await loadQueue()
+    setLoading(false)
+  }
+  init()
+  startSyncEngine()
+
+  function handleOnline() {
+    setIsOnline(true)
+    syncPendingAttendance().then(loadQueue)
+  }
+  function handleOffline() {
+    setIsOnline(false)
+  }
+  window.addEventListener('online', handleOnline)
+  window.addEventListener('offline', handleOffline)
+
+  const interval = setInterval(() => {
+    syncPendingAttendance().then(loadQueue)
+  }, 10000)
+
+  return () => {
+    window.removeEventListener('online', handleOnline)
+    window.removeEventListener('offline', handleOffline)
+    clearInterval(interval)
+  }
+}, [loadStudents, loadQueue])
 
   async function markStatus(studentId, status) {
-    setSavingId(studentId)
-    setSaveErrors((prev) => ({ ...prev, [studentId]: null }))
-    const existing = records[studentId]
     const markedAt = new Date().toISOString()
-
+    let userId = 'unknown'
     try {
-      let result
-      if (existing) {
-        result = await client.graphql({
-          query: updateAttendanceRecord,
-          variables: {
-            input: { id: existing.id, status, marked_at: markedAt },
-          },
-        })
-        setRecords((prev) => ({
-          ...prev,
-          [studentId]: result.data.updateAttendanceRecord,
-        }))
-      } else {
-        result = await client.graphql({
-          query: createAttendanceRecord,
-          variables: {
-            input: {
-              school_id: SCHOOL_ID,
-              student_id: studentId,
-              class_id: CLASS_ID,
-              date: today(),
-              status,
-              marked_by: currentUser?.userId || 'unknown',
-              marked_at: markedAt,
-            },
-          },
-        })
-        setRecords((prev) => ({
-          ...prev,
-          [studentId]: result.data.createAttendanceRecord,
-        }))
-      }
-    } catch (err) {
-      console.error('Failed to save attendance for', studentId, err)
-      setSaveErrors((prev) => ({ ...prev, [studentId]: err.message || 'Save failed' }))
-    } finally {
-      setSavingId(null)
+      const user = await getCurrentUser()
+      userId = user.userId
+    } catch {
+      // offline or session expired — still record locally, sync later
     }
+
+    // If today's record for this student already exists in the queue, update it in place.
+    const existing = queueRecords.find((r) => r.student_id === studentId)
+
+    if (existing) {
+      await db.attendanceQueue.update(existing.localId, {
+        status,
+        marked_at: markedAt,
+        sync_status: existing.remote_id ? 'PENDING' : 'PENDING',
+      })
+    } else {
+      await db.attendanceQueue.add({
+        student_id: studentId,
+        class_id: CLASS_ID,
+        date: today(),
+        status,
+        marked_at: markedAt,
+        marked_by: userId,
+        sync_status: 'PENDING',
+        remote_id: null,
+      })
+    }
+
+    await loadQueue()
+    syncPendingAttendance().then(loadQueue) // fire-and-forget; refresh status once it settles
   }
 
   async function markAllPresent() {
@@ -157,41 +133,67 @@ export default function Teacher() {
     }
   }
 
+  async function handleManualSync() {
+  setSyncing(true)
+  await syncPendingAttendance()
+  await loadQueue()
+  setSyncing(false)
+}
+
   if (loading) {
     return <div style={{ textAlign: 'center', marginTop: 80 }}>Loading roster…</div>
-  }
-
-  if (loadError) {
-    return (
-      <div style={{ textAlign: 'center', marginTop: 80, color: 'red' }}>
-        <p>{loadError}</p>
-        <button onClick={loadData}>Retry</button>
-      </div>
-    )
   }
 
   if (students.length === 0) {
     return (
       <div style={{ textAlign: 'center', marginTop: 80 }}>
-        No students found for this class yet.
+        No students found. Connect to the internet at least once to load the roster.
       </div>
     )
   }
 
-  const markedCount = students.filter((s) => records[s.id]).length
+  const syncedCount = queueRecords.filter((r) => r.sync_status === 'SYNCED').length
 
   return (
     <div style={{ maxWidth: 700, margin: '40px auto', fontFamily: 'sans-serif' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>Teacher Dashboard — Form 2 East</h2>
-        <span style={{ fontSize: 12, border: '1px solid #999', borderRadius: 12, padding: '4px 10px' }}>
-          {markedCount}/{students.length} marked today
-        </span>
-      </div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+  <h2>Teacher Dashboard — Form 2 East</h2>
+  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    <span
+      style={{
+        fontSize: 12,
+        border: '1px solid #999',
+        borderRadius: 12,
+        padding: '4px 10px',
+        color: isOnline ? 'green' : '#c00',
+      }}
+    >
+      {isOnline ? '● Online' : '○ Offline'} — {syncedCount}/{students.length} synced
+    </span>
+    <button
+       onClick={async () => {
+       await signOut()
+       navigate('/login')
+     }}
+     style={{ fontSize: 12, padding: '4px 10px' }}
+     >
+     Sign Out
+   </button>
+  </div>
+</div>
 
       <button onClick={markAllPresent} style={{ marginBottom: 16, padding: '6px 12px' }}>
         Mark All Present
       </button>
+      <button
+        onClick={handleManualSync}
+        disabled={syncing || !isOnline}
+        style={{ marginBottom: 16, marginLeft: 8, padding: '6px 12px' }}
+        >
+       {syncing ? 'Syncing…' : 'Sync Now'}
+      </button>
+
+      
 
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
@@ -205,9 +207,7 @@ export default function Teacher() {
         </thead>
         <tbody>
           {students.map((s) => {
-            const record = records[s.id]
-            const isSaving = savingId === s.id
-            const error = saveErrors[s.id]
+            const record = queueRecords.find((r) => r.student_id === s.id)
             return (
               <tr key={s.id} style={{ borderBottom: '1px solid #eee' }}>
                 <td style={{ padding: '8px 0' }}>{s.first_name} {s.last_name}</td>
@@ -216,17 +216,17 @@ export default function Teacher() {
                     <input
                       type="radio"
                       name={s.id}
-                      disabled={isSaving}
                       checked={record?.status === status}
                       onChange={() => markStatus(s.id, status)}
                     />
                   </td>
                 ))}
                 <td style={{ fontSize: 12 }}>
-                  {isSaving && <span style={{ color: '#888' }}>Saving…</span>}
-                  {!isSaving && record && <span style={{ color: 'green' }}>Synced</span>}
-                  {!isSaving && !record && <span style={{ color: '#999' }}>Not marked</span>}
-                  {error && <span style={{ color: 'red' }}> — {error}</span>}
+                  {!record && <span style={{ color: '#999' }}>Not marked</span>}
+                  {record?.sync_status === 'PENDING' && <span style={{ color: '#c80' }}>Queued</span>}
+                  {record?.sync_status === 'SYNCING' && <span style={{ color: '#888' }}>Syncing…</span>}
+                  {record?.sync_status === 'SYNCED' && <span style={{ color: 'green' }}>Synced</span>}
+                  {record?.sync_status === 'FAILED' && <span style={{ color: 'red' }}>Failed — will retry</span>}
                 </td>
               </tr>
             )
