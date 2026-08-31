@@ -1,0 +1,7 @@
+{
+  "csg-attendance-auth-stack": {
+    "UserPoolClientId": "7c5ck4ui3bkjicu41d5rgv91i8",
+    "UserPoolId": "eu-north-1_g9ImwPUyc",
+    "ExportsOutputRefAttendanceUserPool473252C70AE10A90": "eu-north-1_g9ImwPUyc"
+  }
+}

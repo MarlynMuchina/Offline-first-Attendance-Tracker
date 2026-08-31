@@ -1,0 +1,76 @@
+# CSG Attendance Tracker — GraphQL Schema (DataStore-compatible)
+# Sprint 1 update: adds @model directives so Amplify's GraphQL Transformer
+# auto-generates the sync tables/resolvers Amplify DataStore needs for
+# offline sync. Field names/types unchanged from the Sprint 0 schema —
+# this is an additive change, not a redesign.
+#
+# @model auto-adds: id, _version, _deleted, _lastChangedAt on every type,
+# plus create/update/delete mutations, list/get queries, and subscriptions.
+# We keep our own school_id / created_at / marked_at etc. as regular fields
+# for the CSG-standard metadata and app logic; Amplify's _version/_deleted
+# are separate, internal-to-DataStore fields — don't confuse the two.
+
+type Student @model @auth(rules: [{ allow: private }]) {
+  id: ID!
+  school_id: ID! @index(name: "bySchool")
+  first_name: String!
+  last_name: String!
+  class_id: ID @index(name: "byClass")
+  guardian_phone: AWSPhone
+  status: String
+  created_at: AWSDateTime!
+  updated_at: AWSDateTime!
+}
+
+type Teacher @model @auth(rules: [{ allow: private }]) {
+  id: ID!
+  school_id: ID! @index(name: "bySchool")
+  first_name: String!
+  last_name: String!
+  email: AWSEmail
+  created_at: AWSDateTime!
+  updated_at: AWSDateTime!
+}
+
+type Class @model @auth(rules: [{ allow: private }]) {
+  id: ID!
+  school_id: ID! @index(name: "bySchool")
+  name: String!
+  grade: String!
+  stream: String
+  teacher_id: ID
+  created_at: AWSDateTime!
+  updated_at: AWSDateTime!
+}
+
+type AttendanceRecord @model @auth(rules: [{ allow: private }]) {
+  id: ID!
+  school_id: ID! @index(name: "bySchool")
+  student_id: ID! @index(name: "byStudent")
+  class_id: ID! @index(name: "byClassDate", sortKeyFields: ["date"])
+  date: AWSDate!
+  status: String!            # PRESENT | ABSENT | LATE
+  reason_code: String
+  marked_by: ID
+  marked_at: AWSDateTime!
+  sync_version: Int          # app-level version, separate from Amplify's internal _version
+}
+
+type NotificationLog @model @auth(rules: [{ allow: private }]) {
+  id: ID!
+  school_id: ID! @index(name: "bySchool")
+  student_id: ID! @index(name: "byStudent")
+  guardian_phone: AWSPhone!
+  message: String!
+  channel: String!
+  status: String!
+  sent_at: AWSDateTime
+  created_at: AWSDateTime!
+}
+
+# Note: @auth(rules: [{ allow: private }]) means "any authenticated Cognito
+# user can read/write" for now — this is intentionally permissive to get
+# Sprint 1 working end-to-end. Tightening this to per-role, per-school_id
+# rules (matching the CSG authorization matrix) is Sprint 2/3 work, tracked
+# separately — don't skip it before any real deployment, but don't block
+# Sprint 1 on it either.

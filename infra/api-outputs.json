@@ -1,0 +1,16 @@
+{
+  "csg-attendance-auth-stack": {
+    "UserPoolClientId": "7c5ck4ui3bkjicu41d5rgv91i8",
+    "UserPoolId": "eu-north-1_g9ImwPUyc",
+    "ExportsOutputRefAttendanceUserPool473252C70AE10A90": "eu-north-1_g9ImwPUyc"
+  },
+  "csg-attendance-api-stack": {
+    "awsAppsyncApiEndpoint": "https://3yotgnykd5dibdw7gx4hwqqwoe.appsync-api.eu-north-1.amazonaws.com/graphql",
+    "GraphQLApiId": "wtgwzva7hvcrljtyfsbjgqiora",
+    "awsAppsyncApiId": "wtgwzva7hvcrljtyfsbjgqiora",
+    "awsAppsyncAuthenticationType": "AMAZON_COGNITO_USER_POOLS",
+    "amplifyApiModelSchemaS3Uri": "s3://csg-attendance-api-stack-attendanceapiamplifycodeg-6bdnn3yatvsg/model-schema.graphql",
+    "GraphQLApiUrl": "https://3yotgnykd5dibdw7gx4hwqqwoe.appsync-api.eu-north-1.amazonaws.com/graphql",
+    "awsAppsyncRegion": "eu-north-1"
+  }
+}

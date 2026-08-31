@@ -1,17 +1,28 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { signIn } from 'aws-amplify/auth'
 
-// Login screen — placeholder auth for Sprint 0.
-// Sprint 1 (US-01): wire this to Amplify Auth / Cognito once Marlyn's pool is live.
 export default function Login() {
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
   const navigate = useNavigate()
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
-    // TODO Sprint 1: replace with Amplify Auth.signIn(phone, password)
-    navigate('/teacher')
+    setError('')
+    try {
+      const { isSignedIn } = await signIn({
+        username: phone,
+        password,
+      })
+      if (isSignedIn) {
+        navigate('/teacher')
+      }
+    } catch (err) {
+      console.error('Sign in failed:', err)
+      setError(err.message || 'Login failed')
+    }
   }
 
   return (
@@ -23,7 +34,7 @@ export default function Login() {
         <input
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
-          placeholder="07XX XXX XXX"
+          placeholder="+2547XXXXXXXX"
           style={{ display: 'block', width: '100%', padding: 8, marginBottom: 16 }}
         />
         <label>Password</label>
@@ -33,6 +44,7 @@ export default function Login() {
           onChange={(e) => setPassword(e.target.value)}
           style={{ display: 'block', width: '100%', padding: 8, marginBottom: 16 }}
         />
+        {error && <p style={{ color: 'red', fontSize: 13 }}>{error}</p>}
         <button type="submit" style={{ width: '100%', padding: 10 }}>LOG IN</button>
       </form>
       <div style={{ marginTop: 24, padding: 12, border: '1px dashed #999', fontSize: 13 }}>
