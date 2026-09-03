@@ -106,3 +106,7 @@ export function startSyncEngine() {
   window.addEventListener('online', syncPendingAttendance)
   syncPendingAttendance()
 }
+
+export function stopSyncEngine() {
+  window.removeEventListener('online', syncPendingAttendance)
+}

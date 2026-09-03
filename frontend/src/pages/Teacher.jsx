@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
 import { getCurrentUser, signOut } from 'aws-amplify/auth'
 import { db } from '../lib/db'
-import { startSyncEngine, syncPendingAttendance } from '../lib/syncEngine'
+import { startSyncEngine, syncPendingAttendance, stopSyncEngine } from '../lib/syncEngine'
 
 const client = generateClient()
 
@@ -88,6 +88,7 @@ export default function Teacher() {
     window.removeEventListener('online', handleOnline)
     window.removeEventListener('offline', handleOffline)
     clearInterval(interval)
+    stopSyncEngine()
   }
 }, [loadStudents, loadQueue])
 
