@@ -4,6 +4,7 @@ import { generateClient } from 'aws-amplify/api'
 import { getCurrentUser, signOut } from 'aws-amplify/auth'
 import { db } from '../lib/db'
 import { startSyncEngine, syncPendingAttendance, stopSyncEngine } from '../lib/syncEngine'
+import { getQueueHealth } from '../lib/storageQuotaManager'
 
 const client = generateClient()
 
@@ -32,6 +33,8 @@ export default function Teacher() {
   const [isOnline, setIsOnline] = useState(navigator.onLine)
 
   const [syncing, setSyncing] = useState(false)
+
+  const [storageWarning, setStorageWarning] = useState(null)
 
   // Load roster: try network first, fall back to local cache if offline.
   const loadStudents = useCallback(async () => {
@@ -80,8 +83,11 @@ export default function Teacher() {
   window.addEventListener('online', handleOnline)
   window.addEventListener('offline', handleOffline)
 
-  const interval = setInterval(() => {
+    const interval = setInterval(() => {
     syncPendingAttendance().then(loadQueue)
+    getQueueHealth().then((health) => {
+      setStorageWarning(health.criticalUnsynced ? health : null)
+    })
   }, 10000)
 
   return () => {
@@ -92,7 +98,7 @@ export default function Teacher() {
   }
 }, [loadStudents, loadQueue])
 
-  async function markStatus(studentId, status) {
+    async function markStatus(studentId, status) {
     const markedAt = new Date().toISOString()
     let userId = 'unknown'
     try {
@@ -109,7 +115,11 @@ export default function Teacher() {
       await db.attendanceQueue.update(existing.localId, {
         status,
         marked_at: markedAt,
-        sync_status: existing.remote_id ? 'PENDING' : 'PENDING',
+        sync_status: 'PENDING',
+        // Reuse the same client_request_id across edits to the same queue
+        // entry, so retries and re-marks before the first sync completes
+        // still count as one idempotent write, not a race of duplicates.
+        client_request_id: existing.client_request_id || crypto.randomUUID(),
       })
     } else {
       await db.attendanceQueue.add({
@@ -121,6 +131,7 @@ export default function Teacher() {
         marked_by: userId,
         sync_status: 'PENDING',
         remote_id: null,
+        client_request_id: crypto.randomUUID(),
       })
     }
 
@@ -182,6 +193,15 @@ export default function Teacher() {
    </button>
   </div>
 </div>
+      {storageWarning && (
+        <div style={{
+          marginBottom: 16, padding: '10px 14px', border: '1px solid #c80',
+          borderRadius: 6, background: '#fff8ec', fontSize: 13, color: '#8a5a00',
+        }}>
+          ⚠ Device storage is nearly full and {storageWarning.unsyncedCount} record(s) haven't synced yet.
+          These records are safe and won't be deleted, but please connect to the internet soon to free up space.
+        </div>
+      )}
 
       <button onClick={markAllPresent} style={{ marginBottom: 16, padding: '6px 12px' }}>
         Mark All Present

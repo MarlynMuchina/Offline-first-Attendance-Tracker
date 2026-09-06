@@ -10,7 +10,10 @@
 # for the CSG-standard metadata and app logic; Amplify's _version/_deleted
 # are separate, internal-to-DataStore fields — don't confuse the two.
 
-type Student @model @auth(rules: [{ allow: private }]) {
+type Student @model @auth(rules: [
+  { allow: groups, groups: ["Admin", "HeadTeacher", "Teacher"], operations: [create, read, update, delete] }
+  { allow: groups, groups: ["Parent"], operations: [read] }
+]) {
   id: ID!
   school_id: ID! @index(name: "bySchool")
   first_name: String!
@@ -22,7 +25,10 @@ type Student @model @auth(rules: [{ allow: private }]) {
   updated_at: AWSDateTime!
 }
 
-type Teacher @model @auth(rules: [{ allow: private }]) {
+type Teacher @model @auth(rules: [
+  { allow: groups, groups: ["Admin", "HeadTeacher"], operations: [create, read, update, delete] }
+  { allow: groups, groups: ["Teacher"], operations: [read] }
+]) {
   id: ID!
   school_id: ID! @index(name: "bySchool")
   first_name: String!
@@ -32,7 +38,10 @@ type Teacher @model @auth(rules: [{ allow: private }]) {
   updated_at: AWSDateTime!
 }
 
-type Class @model @auth(rules: [{ allow: private }]) {
+type Class @model @auth(rules: [
+  { allow: groups, groups: ["Admin", "HeadTeacher"], operations: [create, read, update, delete] }
+  { allow: groups, groups: ["Teacher"], operations: [read] }
+]) {
   id: ID!
   school_id: ID! @index(name: "bySchool")
   name: String!
@@ -43,7 +52,11 @@ type Class @model @auth(rules: [{ allow: private }]) {
   updated_at: AWSDateTime!
 }
 
-type AttendanceRecord @model @auth(rules: [{ allow: private }]) {
+type AttendanceRecord @model @auth(rules: [
+  { allow: groups, groups: ["Admin", "HeadTeacher"], operations: [create, read, update, delete] }
+  { allow: groups, groups: ["Teacher"], operations: [create, read, update] }
+  { allow: groups, groups: ["Parent"], operations: [read] }
+]) {
   id: ID!
   school_id: ID! @index(name: "bySchool")
   student_id: ID! @index(name: "byStudent")
@@ -56,7 +69,51 @@ type AttendanceRecord @model @auth(rules: [{ allow: private }]) {
   sync_version: Int          # app-level version, separate from Amplify's internal _version
 }
 
-type NotificationLog @model @auth(rules: [{ allow: private }]) {
+input MarkAttendanceInput {
+  school_id: ID!
+  student_id: ID!
+  class_id: ID!
+  date: AWSDate!
+  status: String!
+  marked_by: ID!
+  marked_at: AWSDateTime!
+  client_request_id: String!
+}
+
+type MarkAttendanceResult {
+  id: ID!
+  student_id: ID!
+  status: String!
+  marked_at: AWSDateTime!
+}
+
+type Mutation {
+  markAttendance(input: MarkAttendanceInput!): MarkAttendanceResult
+    @function(name: "markAttendanceFunction")
+    @auth(rules: [{ allow: private }])
+}
+
+input GenerateAttendanceSummaryInput {
+  school_id: ID!
+  class_id: ID!
+  start_date: AWSDate!
+  end_date: AWSDate!
+}
+
+type AttendanceSummaryResult {
+  summary: String!
+  generated_at: AWSDateTime!
+}
+
+type Query {
+  generateAttendanceSummary(input: GenerateAttendanceSummaryInput!): AttendanceSummaryResult
+    @function(name: "attendanceSummaryFunction")
+    @auth(rules: [{ allow: groups, groups: ["Admin", "HeadTeacher", "Teacher"] }])
+}
+
+type NotificationLog @model @auth(rules: [
+  { allow: groups, groups: ["Admin", "HeadTeacher"], operations: [create, read, update, delete] }
+]) {
   id: ID!
   school_id: ID! @index(name: "bySchool")
   student_id: ID! @index(name: "byStudent")
@@ -68,9 +125,10 @@ type NotificationLog @model @auth(rules: [{ allow: private }]) {
   created_at: AWSDateTime!
 }
 
-# Note: @auth(rules: [{ allow: private }]) means "any authenticated Cognito
-# user can read/write" for now — this is intentionally permissive to get
-# Sprint 1 working end-to-end. Tightening this to per-role, per-school_id
-# rules (matching the CSG authorization matrix) is Sprint 2/3 work, tracked
-# separately — don't skip it before any real deployment, but don't block
-# Sprint 1 on it either.
+# Sprint 2 (issue #26): replaced allow:private with allow:groups rules
+# matching Cognito groups (Admin/HeadTeacher/Teacher/Parent). This is
+# group-level, not yet assignment-level -- a Teacher in the Teacher group
+# can read/write for ANY class, not just their own assigned one, since no
+# teacher-to-class assignment model exists yet. True per-assignment scoping
+# (matching the CSG authorization matrix's "Assigned classes" column) is a
+# known follow-up, not yet implemented.

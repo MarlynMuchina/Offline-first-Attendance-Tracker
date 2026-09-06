@@ -7,3 +7,18 @@ cdk.out/
 frontend/node_modules/
 
 .vscode/
+
+# Debug/test scratch files from manual testing
+bedrock-models.json
+inference-profiles.json
+frontend/coverage/
+frontend/scan-*.json
+infra/*.csv
+infra/class-seed.json
+infra/*response*.json
+infra/scan-*.json
+infra/test-payload*.json
+
+infra/lambda/*/coverage/
+
+infra/test-*payload*.json

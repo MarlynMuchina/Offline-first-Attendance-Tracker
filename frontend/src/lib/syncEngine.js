@@ -5,20 +5,9 @@ import { runStorageMaintenance } from './storageQuotaManager'
 
 const client = generateClient()
 
-const createAttendanceRecord = /* GraphQL */ `
-  mutation CreateAttendanceRecord($input: CreateAttendanceRecordInput!) {
-    createAttendanceRecord(input: $input) {
-      id
-      student_id
-      status
-      marked_at
-    }
-  }
-`
-
-const updateAttendanceRecord = /* GraphQL */ `
-  mutation UpdateAttendanceRecord($input: UpdateAttendanceRecordInput!) {
-    updateAttendanceRecord(input: $input) {
+const markAttendance = /* GraphQL */ `
+  mutation MarkAttendance($input: MarkAttendanceInput!) {
+    markAttendance(input: $input) {
       id
       student_id
       status
@@ -54,43 +43,26 @@ export async function syncPendingAttendance() {
     for (const record of pending) {
       await db.attendanceQueue.update(record.localId, { sync_status: 'SYNCING' })
 
-      try {
-        let result
-        if (record.remote_id) {
-          result = await client.graphql({
-            query: updateAttendanceRecord,
-            variables: {
-              input: {
-                id: record.remote_id,
-                status: record.status,
-                marked_at: record.marked_at,
-              },
+            try {
+        const result = await client.graphql({
+          query: markAttendance,
+          variables: {
+            input: {
+              school_id: SCHOOL_ID,
+              student_id: record.student_id,
+              class_id: record.class_id,
+              date: record.date,
+              status: record.status,
+              marked_by: user.userId,
+              marked_at: record.marked_at,
+              client_request_id: record.client_request_id,
             },
-          })
-          await db.attendanceQueue.update(record.localId, {
-            sync_status: 'SYNCED',
-            remote_id: result.data.updateAttendanceRecord.id,
-          })
-        } else {
-          result = await client.graphql({
-            query: createAttendanceRecord,
-            variables: {
-              input: {
-                school_id: SCHOOL_ID,
-                student_id: record.student_id,
-                class_id: record.class_id,
-                date: record.date,
-                status: record.status,
-                marked_by: user.userId,
-                marked_at: record.marked_at,
-              },
-            },
-          })
-          await db.attendanceQueue.update(record.localId, {
-            sync_status: 'SYNCED',
-            remote_id: result.data.createAttendanceRecord.id,
-          })
-        }
+          },
+        })
+        await db.attendanceQueue.update(record.localId, {
+          sync_status: 'SYNCED',
+          remote_id: result.data.markAttendance.id,
+        })
       } catch (err) {
         console.error('Sync failed for record', record.localId, err)
         await db.attendanceQueue.update(record.localId, { sync_status: 'FAILED' })

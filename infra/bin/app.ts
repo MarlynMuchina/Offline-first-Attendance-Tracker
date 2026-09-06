@@ -3,6 +3,7 @@ import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
 import { AuthStack } from '../stacks/auth_stack';
 import { ApiStack } from '../stacks/api_stack';
+import { AnalyticsStack } from '../stacks/analytics_stack';
 
 const app = new cdk.App();
 
@@ -22,3 +23,5 @@ new ApiStack(app, `${stackPrefix}-api-stack`, {
   env,
   userPool: authStack.userPool,
 });
+
+new AnalyticsStack(app, `${stackPrefix}-analytics-stack`, { env });

@@ -92,3 +92,26 @@ export async function runStorageMaintenance() {
 
   return status
 }
+
+/**
+ * Distinguishes a benign "approaching limit but we can prune old synced
+ * records" situation from a genuinely dangerous one: approaching limit AND
+ * there's a backlog of unsynced (PENDING/SYNCING/FAILED) data that CANNOT
+ * be safely deleted, because doing so would silently lose real attendance
+ * marks. We never auto-delete unsynced records -- the only safe response
+ * here is to surface a clear warning so the teacher knows to reconnect soon.
+ */
+export async function getQueueHealth() {
+  const status = await runStorageMaintenance()
+
+  const unsyncedCount = await db.attendanceQueue
+    .where('sync_status')
+    .anyOf('PENDING', 'SYNCING', 'FAILED')
+    .count()
+
+  return {
+    ...status,
+    unsyncedCount,
+    criticalUnsynced: status.approachingLimit && unsyncedCount > 0,
+  }
+}
