@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
 import { signOut } from 'aws-amplify/auth'
+import jsPDF from 'jspdf'
 
 const client = generateClient()
 
@@ -112,7 +113,6 @@ export default function Admin() {
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [summaryError, setSummaryError] = useState('')
 
-  // Add Student form state
   const [newFirstName, setNewFirstName] = useState('')
   const [newLastName, setNewLastName] = useState('')
   const [newGuardianPhone, setNewGuardianPhone] = useState('')
@@ -200,6 +200,79 @@ export default function Admin() {
     }
   }
 
+  // Builds a real PDF entirely in the browser — no server involved.
+  // Sprint 3 deliverable (Sasha): admin config panel + PDF export.
+  function handleExportPDF() {
+    if (!stats) return
+
+    const doc = new jsPDF()
+    let y = 20
+
+    doc.setFontSize(16)
+    doc.text('Attendance Report — Form 2 East', 14, y)
+    y += 8
+
+    doc.setFontSize(10)
+    doc.setTextColor(120)
+    doc.text(`Date range: ${startDate} to ${endDate}`, 14, y)
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, y + 5)
+    y += 16
+
+    doc.setTextColor(0)
+    doc.setFontSize(13)
+    doc.text('Attendance Trend', 14, y)
+    y += 7
+    doc.setFontSize(11)
+    doc.text(
+      stats.overallRate !== null ? `${Math.round(stats.overallRate * 100)}% average` : 'No data available',
+      14,
+      y
+    )
+    y += 14
+
+    doc.setFontSize(13)
+    doc.text(`Students Below 70% Attendance (${stats.chronic.length})`, 14, y)
+    y += 8
+    doc.setFontSize(10)
+
+    if (stats.chronic.length === 0) {
+      doc.text('No students currently below the threshold.', 14, y)
+      y += 8
+    } else {
+      for (const c of stats.chronic) {
+        doc.text(
+          `${c.student.first_name} ${c.student.last_name} — ${Math.round(c.rate * 100)}% (${c.absent} absences)`,
+          14,
+          y
+        )
+        y += 6
+        if (y > 270) {
+          doc.addPage()
+          y = 20
+        }
+      }
+      y += 6
+    }
+
+    if (summary) {
+      doc.setFontSize(13)
+      doc.text('AI-Generated Summary', 14, y)
+      y += 8
+      doc.setFontSize(10)
+      const lines = doc.splitTextToSize(summary.summary, 180)
+      for (const line of lines) {
+        if (y > 270) {
+          doc.addPage()
+          y = 20
+        }
+        doc.text(line, 14, y)
+        y += 6
+      }
+    }
+
+    doc.save(`attendance-report-${startDate}-to-${endDate}.pdf`)
+  }
+
   const signOutButton = (
     <button
       onClick={async () => {
@@ -235,7 +308,12 @@ export default function Admin() {
     <div style={{ maxWidth: 800, margin: '40px auto', fontFamily: 'sans-serif' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>Administrator Dashboard</h2>
-        {signOutButton}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={handleExportPDF} style={{ fontSize: 12, padding: '4px 10px' }}>
+            Export PDF
+          </button>
+          {signOutButton}
+        </div>
       </div>
       <p style={{ color: '#888', fontSize: 12 }}>
         Showing data from {startDate} to {endDate}
