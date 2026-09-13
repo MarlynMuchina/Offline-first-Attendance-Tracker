@@ -11,25 +11,27 @@ const CLASS_ID = 'class-form2east'
 const CHRONIC_THRESHOLD = 0.7
 
 const listStudentsQuery = /* GraphQL */ `
-  query ListStudentsByClass($classId: ID) {
-    listStudents(filter: { class_id: { eq: $classId } }, limit: 100) {
+  query ListStudentsByClass($classId: ID, $nextToken: String) {
+    listStudents(filter: { class_id: { eq: $classId } }, limit: 100, nextToken: $nextToken) {
       items {
         id
         first_name
         last_name
       }
+      nextToken
     }
   }
 `
 
 const listAttendanceQuery = /* GraphQL */ `
-  query ListAttendanceByClassAndRange($classId: ID, $startDate: String, $endDate: String) {
+  query ListAttendanceByClassAndRange($classId: ID, $startDate: String, $endDate: String, $nextToken: String) {
     listAttendanceRecords(
       filter: {
         class_id: { eq: $classId }
         date: { between: [$startDate, $endDate] }
       }
       limit: 1000
+      nextToken: $nextToken
     ) {
       items {
         id
@@ -37,6 +39,7 @@ const listAttendanceQuery = /* GraphQL */ `
         date
         status
       }
+      nextToken
     }
   }
 `
@@ -59,6 +62,29 @@ const createStudentMutation = /* GraphQL */ `
     }
   }
 `
+
+// Walks through every page of a paginated Amplify list query, using
+// nextToken, until the full result set has been collected. Without this,
+// any query result over its per-page limit (1000 for attendance, 100 for
+// students) silently truncates -- no error, just incomplete data. This
+// matters at scale: a single class over one term can already exceed 1000
+// attendance records, and this project needs to handle many classes across
+// many schools.
+async function fetchAllPages(query, baseVariables, resultKey) {
+  let items = []
+  let nextToken = null
+  do {
+    const res = await client.graphql({
+      query,
+      variables: { ...baseVariables, nextToken },
+    })
+    const page = res.data[resultKey]
+    items = items.concat(page.items)
+    nextToken = page.nextToken
+  } while (nextToken)
+  return items
+}
+
 
 function defaultDateRange() {
   const end = new Date()
@@ -119,19 +145,18 @@ export default function Admin() {
   const [addingStudent, setAddingStudent] = useState(false)
   const [addStudentError, setAddStudentError] = useState('')
 
-  const loadData = useCallback(async () => {
+    const loadData = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const [studentsRes, recordsRes] = await Promise.all([
-        client.graphql({ query: listStudentsQuery, variables: { classId: CLASS_ID } }),
-        client.graphql({
-          query: listAttendanceQuery,
-          variables: { classId: CLASS_ID, startDate, endDate },
-        }),
+      const [students, records] = await Promise.all([
+        fetchAllPages(listStudentsQuery, { classId: CLASS_ID }, 'listStudents'),
+        fetchAllPages(
+          listAttendanceQuery,
+          { classId: CLASS_ID, startDate, endDate },
+          'listAttendanceRecords'
+        ),
       ])
-      const students = studentsRes.data.listStudents.items
-      const records = recordsRes.data.listAttendanceRecords.items
       setStats(computeStats(students, records))
     } catch (err) {
       console.error('Failed to load dashboard data:', err)
