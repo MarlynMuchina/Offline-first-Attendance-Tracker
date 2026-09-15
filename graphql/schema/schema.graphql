@@ -90,7 +90,11 @@ type MarkAttendanceResult {
 type Mutation {
   markAttendance(input: MarkAttendanceInput!): MarkAttendanceResult
     @function(name: "markAttendanceFunction")
-    @auth(rules: [{ allow: private }])
+
+    sendAttendanceAlert(input: SendAttendanceAlertInput!): SendAlertResult
+    @function(name: "sendSmsFunction")
+    @auth(rules: [{ allow: groups, groups: ["Admin", "HeadTeacher", "Teacher"] }])
+
 }
 
 input GenerateAttendanceSummaryInput {
@@ -132,3 +136,19 @@ type NotificationLog @model @auth(rules: [
 # teacher-to-class assignment model exists yet. True per-assignment scoping
 # (matching the CSG authorization matrix's "Assigned classes" column) is a
 # known follow-up, not yet implemented.
+
+
+input SendAttendanceAlertInput {
+  school_id: ID!
+  student_id: ID!
+  guardian_phone: AWSPhone!
+  message: String!
+}
+
+type SendAlertResult {
+  success: Boolean!
+  status: String!
+  notification_id: ID!
+}
+
+

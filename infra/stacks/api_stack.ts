@@ -1,3 +1,4 @@
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -110,6 +111,32 @@ export class ApiStack extends cdk.Stack {
       },
     });
 
+
+    const notificationTable = dynamodb.Table.fromTableName(
+  this, 'ImportedNotificationTable', 'NotificationLog-wtgwzva7hvcrljtyfsbjgqiora-NONE'
+);
+
+const atSecret = secretsmanager.Secret.fromSecretNameV2(
+  this, 'AfricasTalkingSecret', 'csg-africastalking-credentials'
+);
+
+const sendSmsFn = new lambda.Function(this, 'SendSmsAlertFunction', {
+  functionName: 'sendSmsFunction',
+  runtime: lambda.Runtime.NODEJS_18_X,
+  handler: 'index.handler',
+  timeout: cdk.Duration.seconds(15),
+  code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/sendSmsAlert')),
+  environment: {
+    NOTIFICATION_TABLE: notificationTable.tableName,
+    AT_SECRET_NAME: 'csg-africastalking-credentials',
+  },
+});
+
+notificationTable.grantWriteData(sendSmsFn);
+atSecret.grantRead(sendSmsFn);
+
+
+
     attendanceTable.grantReadData(attendanceSummaryFn);
     studentTable.grantReadData(attendanceSummaryFn);
     attendanceSummaryFn.addToRolePolicy(new iam.PolicyStatement({
@@ -143,8 +170,9 @@ export class ApiStack extends cdk.Stack {
         userPoolConfig: { userPool: props.userPool },
       },
       functionNameMap: {
-        markAttendanceFunction: markAttendanceFn,
-        attendanceSummaryFunction: attendanceSummaryFn,
+          markAttendanceFunction: markAttendanceFn,
+          attendanceSummaryFunction: attendanceSummaryFn,
+         sendSmsFunction: sendSmsFn,
       },
     });
 

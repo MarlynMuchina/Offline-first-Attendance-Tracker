@@ -22,3 +22,9 @@ infra/test-payload*.json
 infra/lambda/*/coverage/
 
 infra/test-*payload*.json
+
+secret-content.json
+infra/secret-content.json
+
+sms-response.json
+test-sms-payload.json

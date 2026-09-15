@@ -1,0 +1,11 @@
+{
+  "name": "send-sms-alert-function",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "africastalking": "^0.7.0",
+    "@aws-sdk/client-secrets-manager": "^3.600.0",
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0"
+  }
+}
