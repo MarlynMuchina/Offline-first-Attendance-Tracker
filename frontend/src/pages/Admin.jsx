@@ -1,14 +1,15 @@
+import ReactMarkdown from 'react-markdown'
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
 import { signOut } from 'aws-amplify/auth'
 import jsPDF from 'jspdf'
+import { getChronicThreshold } from '../lib/settings'
 
 const client = generateClient()
 
 const SCHOOL_ID = 'school-001'
 const CLASS_ID = 'class-form2east'
-const CHRONIC_THRESHOLD = 0.7
 
 const listStudentsQuery = /* GraphQL */ `
   query ListStudentsByClass($classId: ID, $nextToken: String) {
@@ -94,7 +95,7 @@ function defaultDateRange() {
   return { startDate: fmt(start), endDate: fmt(end) }
 }
 
-function computeStats(students, records) {
+function computeStats(students, records, threshold) {
   const byStudent = {}
   for (const s of students) {
     byStudent[s.id] = { student: s, total: 0, attended: 0, absent: 0 }
@@ -122,7 +123,7 @@ function computeStats(students, records) {
       : null
 
   const chronic = perStudent
-    .filter((p) => p.rate !== null && p.rate < CHRONIC_THRESHOLD)
+    .filter((p) => p.rate !== null && p.rate < threshold)
     .sort((a, b) => a.rate - b.rate)
 
   return { perStudent, overallRate, chronic }
@@ -145,7 +146,7 @@ export default function Admin() {
   const [addingStudent, setAddingStudent] = useState(false)
   const [addStudentError, setAddStudentError] = useState('')
 
-    const loadData = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
@@ -157,7 +158,7 @@ export default function Admin() {
           'listAttendanceRecords'
         ),
       ])
-      setStats(computeStats(students, records))
+      setStats(computeStats(students, records, getChronicThreshold()))
     } catch (err) {
       console.error('Failed to load dashboard data:', err)
       const detail = err.errors?.map((e) => e.message).join('; ') || err.message || JSON.stringify(err)
@@ -225,8 +226,6 @@ export default function Admin() {
     }
   }
 
-  // Builds a real PDF entirely in the browser — no server involved.
-  // Sprint 3 deliverable (Sasha): admin config panel + PDF export.
   function handleExportPDF() {
     if (!stats) return
 
@@ -299,87 +298,78 @@ export default function Admin() {
   }
 
   const signOutButton = (
-    <button
-      onClick={async () => {
-        await signOut()
-        navigate('/login')
-      }}
-      style={{ fontSize: 12, padding: '4px 10px' }}
-    >
+    <button onClick={async () => { await signOut(); navigate('/login') }} className="btn btn-small">
       Sign Out
     </button>
   )
 
   if (loading) {
-    return <div style={{ textAlign: 'center', marginTop: 80 }}>Loading dashboard…</div>
+    return <div className="page" style={{ textAlign: 'center', marginTop: 80 }}>Loading dashboard…</div>
   }
 
   if (error) {
     return (
-      <div style={{ maxWidth: 700, margin: '80px auto', fontFamily: 'sans-serif', textAlign: 'center' }}>
+      <div className="page" style={{ textAlign: 'center', marginTop: 80 }}>
         <h3>Couldn't load dashboard data</h3>
-        <p style={{ color: 'red', fontSize: 13 }}>{error}</p>
-        <button onClick={loadData} style={{ marginRight: 8 }}>Retry</button>
-        {signOutButton}
+        <p className="text-error">{error}</p>
+        <div className="button-group" style={{ justifyContent: 'center' }}>
+          <button onClick={loadData} className="btn">Retry</button>
+          {signOutButton}
+        </div>
       </div>
     )
   }
 
   if (!stats) {
-    return <div style={{ textAlign: 'center', marginTop: 80 }}>No data available.</div>
+    return <div className="page" style={{ textAlign: 'center', marginTop: 80 }}>No data available.</div>
   }
 
   return (
-    <div style={{ maxWidth: 800, margin: '40px auto', fontFamily: 'sans-serif' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div className="page">
+      <div className="page-header">
         <h2>Administrator Dashboard</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={handleExportPDF} style={{ fontSize: 12, padding: '4px 10px' }}>
-            Export PDF
-          </button>
+        <div className="button-group">
+          <button onClick={handleExportPDF} className="btn btn-small">Export PDF</button>
+          <button onClick={() => navigate('/admin/settings')} className="btn btn-small">Settings</button>
           {signOutButton}
         </div>
       </div>
-      <p style={{ color: '#888', fontSize: 12 }}>
-        Showing data from {startDate} to {endDate}
-      </p>
+      <p className="subtext">Showing data from {startDate} to {endDate}</p>
 
-      <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
-        <div style={{ flex: 1, border: '1px solid #ddd', borderRadius: 6, padding: 16 }}>
+      <div className="card-row">
+        <div className="card">
           <h4>Attendance Trend</h4>
-          <p style={{ fontSize: 28, margin: 0 }}>
+          <p className="big-stat">
             {stats.overallRate !== null ? `${Math.round(stats.overallRate * 100)}%` : '—'}
           </p>
-          <p style={{ color: '#888', fontSize: 12 }}>Average over selected range</p>
+          <p className="subtext">Average over selected range</p>
         </div>
 
-        <div style={{ flex: 1, border: '1px dashed #999', borderRadius: 6, padding: 16, background: '#fafafa' }}>
+        <div className="card card-dashed">
           <h4>AI Summary (Claude via Bedrock)</h4>
           {!summary && !summaryLoading && (
-            <button onClick={handleGenerateSummary} style={{ fontSize: 12, padding: '6px 10px' }}>
-              Generate Summary
-            </button>
+            <button onClick={handleGenerateSummary} className="btn btn-small">Generate Summary</button>
           )}
-          {summaryLoading && <p style={{ fontSize: 12, color: '#888' }}>Generating…</p>}
-          {summaryError && <p style={{ fontSize: 12, color: 'red' }}>{summaryError}</p>}
+          {summaryLoading && <p className="subtext">Generating…</p>}
+          {summaryError && <p className="text-error">{summaryError}</p>}
           {summary && (
             <>
-              <p style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{summary.summary}</p>
-              <p style={{ fontSize: 10, color: '#aaa' }}>
+              <div style={{ fontSize: 13 }} className="markdown-body">
+                <ReactMarkdown>{summary.summary}</ReactMarkdown>
+              </div>
+              <p className="subtext" style={{ fontSize: 10 }}>
                 Generated at {new Date(summary.generated_at).toLocaleString()}
               </p>
-              <button onClick={handleGenerateSummary} style={{ fontSize: 11, padding: '4px 8px' }}>
-                Regenerate
-              </button>
+              <button onClick={handleGenerateSummary} className="btn btn-small">Regenerate</button>
             </>
           )}
         </div>
       </div>
 
       <h4>Students Below 70% Attendance ({stats.chronic.length})</h4>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <table>
         <thead>
-          <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
+          <tr>
             <th>Student</th>
             <th>Attendance rate</th>
             <th>Absences</th>
@@ -387,17 +377,15 @@ export default function Admin() {
         </thead>
         <tbody>
           {stats.chronic.map((c) => (
-            <tr key={c.student.id} style={{ borderBottom: '1px solid #eee' }}>
-              <td style={{ padding: '8px 0' }}>
-                {c.student.first_name} {c.student.last_name}
-              </td>
+            <tr key={c.student.id}>
+              <td>{c.student.first_name} {c.student.last_name}</td>
               <td>{Math.round(c.rate * 100)}%</td>
               <td>{c.absent}</td>
             </tr>
           ))}
           {stats.chronic.length === 0 && (
             <tr>
-              <td colSpan={3} style={{ padding: '12px 0', color: '#888' }}>
+              <td colSpan={3} className="subtext" style={{ padding: '12px 6px' }}>
                 No students currently below the threshold.
               </td>
             </tr>
@@ -405,41 +393,31 @@ export default function Admin() {
         </tbody>
       </table>
 
-      <div style={{ marginTop: 32, borderTop: '1px solid #ddd', paddingTop: 20 }}>
+      <div className="section-divider">
         <h4>Add Student to Form 2 East</h4>
-        <form onSubmit={handleAddStudent} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <form onSubmit={handleAddStudent} className="form-row">
           <div>
-            <label style={{ display: 'block', fontSize: 12 }}>First name</label>
-            <input
-              value={newFirstName}
-              onChange={(e) => setNewFirstName(e.target.value)}
-              required
-              style={{ padding: 6 }}
-            />
+            <label className="field-label">First name</label>
+            <input value={newFirstName} onChange={(e) => setNewFirstName(e.target.value)} required className="input" />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 12 }}>Last name</label>
-            <input
-              value={newLastName}
-              onChange={(e) => setNewLastName(e.target.value)}
-              required
-              style={{ padding: 6 }}
-            />
+            <label className="field-label">Last name</label>
+            <input value={newLastName} onChange={(e) => setNewLastName(e.target.value)} required className="input" />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 12 }}>Guardian phone (optional)</label>
+            <label className="field-label">Guardian phone (optional)</label>
             <input
               value={newGuardianPhone}
               onChange={(e) => setNewGuardianPhone(e.target.value)}
               placeholder="+2547XXXXXXXX"
-              style={{ padding: 6 }}
+              className="input"
             />
           </div>
-          <button type="submit" disabled={addingStudent} style={{ padding: '7px 14px' }}>
+          <button type="submit" disabled={addingStudent} className="btn btn-primary">
             {addingStudent ? 'Adding…' : 'Add Student'}
           </button>
         </form>
-        {addStudentError && <p style={{ color: 'red', fontSize: 12, marginTop: 8 }}>{addStudentError}</p>}
+        {addStudentError && <p className="text-error" style={{ marginTop: 8 }}>{addStudentError}</p>}
       </div>
     </div>
   )

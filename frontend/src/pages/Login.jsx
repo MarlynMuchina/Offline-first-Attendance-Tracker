@@ -14,10 +14,7 @@ export default function Login() {
     e.preventDefault()
     setError('')
     try {
-      const { isSignedIn, nextStep } = await signIn({
-        username: phone,
-        password,
-      })
+      const { isSignedIn, nextStep } = await signIn({ username: phone, password })
 
       if (isSignedIn) {
         navigate('/teacher')
@@ -29,7 +26,6 @@ export default function Login() {
         return
       }
 
-      // Any other Cognito challenge (MFA, etc.) — not yet handled, surface it plainly
       setError(`Additional step required: ${nextStep?.signInStep || 'unknown'}`)
     } catch (err) {
       console.error('Sign in failed:', err)
@@ -53,51 +49,60 @@ export default function Login() {
 
   if (needsNewPassword) {
     return (
-      <div style={{ maxWidth: 360, margin: '80px auto', fontFamily: 'sans-serif' }}>
+      <div className="auth-wrap">
         <h2 style={{ textAlign: 'center' }}>Set a New Password</h2>
-        <p style={{ textAlign: 'center', color: '#888' }}>
+        <p className="subtext" style={{ textAlign: 'center' }}>
           This is your first time signing in — choose a permanent password.
         </p>
         <form onSubmit={handleNewPassword}>
-          <label>New Password</label>
+          <label className="field-label">New Password</label>
           <input
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            style={{ display: 'block', width: '100%', padding: 8, marginBottom: 16 }}
+            className="input"
+            style={{ marginBottom: 16 }}
           />
-          {error && <p style={{ color: 'red', fontSize: 13 }}>{error}</p>}
-          <button type="submit" style={{ width: '100%', padding: 10 }}>SET PASSWORD</button>
+          {error && <p className="text-error">{error}</p>}
+          <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
+            SET PASSWORD
+          </button>
         </form>
       </div>
     )
   }
 
   return (
-    <div style={{ maxWidth: 360, margin: '80px auto', fontFamily: 'sans-serif' }}>
+    <div className="auth-wrap">
       <h2 style={{ textAlign: 'center' }}>Student Attendance Tracker</h2>
-      <p style={{ textAlign: 'center', color: '#888' }}>Sign in to continue</p>
+      <p className="subtext" style={{ textAlign: 'center' }}>Sign in to continue</p>
       <form onSubmit={handleSubmit}>
-        <label>Phone Number</label>
+        <label className="field-label">Phone Number</label>
         <input
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           placeholder="+2547XXXXXXXX"
-          style={{ display: 'block', width: '100%', padding: 8, marginBottom: 16 }}
+          className="input"
+          style={{ marginBottom: 16 }}
         />
-        <label>Password</label>
+        <label className="field-label">Password</label>
         <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          style={{ display: 'block', width: '100%', padding: 8, marginBottom: 16 }}
+          className="input"
+          style={{ marginBottom: 16 }}
         />
-        {error && <p style={{ color: 'red', fontSize: 13 }}>{error}</p>}
-        <button type="submit" style={{ width: '100%', padding: 10 }}>LOG IN</button>
+        {error && <p className="text-error">{error}</p>}
+        <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
+          LOG IN
+        </button>
       </form>
-      <div style={{ marginTop: 24, padding: 12, border: '1px dashed #999', fontSize: 13 }}>
+      <div className="notice-box">
         <strong>Offline access</strong>
-        <p>You can log in and record attendance without internet. Data syncs once you're back online.</p>
+        <p style={{ margin: '6px 0 0' }}>
+          You can log in and record attendance without internet. Data syncs once you're back online.
+        </p>
       </div>
     </div>
   )
