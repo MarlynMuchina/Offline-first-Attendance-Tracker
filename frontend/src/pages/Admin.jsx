@@ -1,6 +1,4 @@
-<<<<<<< Updated upstream
-import { mockAttendanceDashboard } from '../mocks/fixtures'
-=======
+import ReactMarkdown from 'react-markdown'
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
@@ -104,19 +102,8 @@ function computeStats(students, records, threshold) {
 
   return { perStudent, overallRate, chronic }
 }
->>>>>>> Stashed changes
 
-// Admin dashboard — trend view + chronic absenteeism (US-07, US-09).
-// Claude AI summary panel (US-08) is reserved layout space — that's Sprint 2 work.
-// Sprint 1: replace mockAttendanceDashboard with getAttendanceDashboard(school_id, term_id).
 export default function Admin() {
-<<<<<<< Updated upstream
-  const { attendance_rate, chronic_absenteeism_count, class_summaries } = mockAttendanceDashboard
-
-  return (
-    <div style={{ maxWidth: 800, margin: '40px auto', fontFamily: 'sans-serif' }}>
-      <h2>Administrator Dashboard</h2>
-=======
   const navigate = useNavigate()
   const [{ startDate, endDate }] = useState(defaultDateRange)
   const [loading, setLoading] = useState(true)
@@ -323,27 +310,10 @@ export default function Admin() {
         </div>
       </div>
       <p className="subtext">Showing data from {startDate} to {endDate}</p>
->>>>>>> Stashed changes
 
       <div className="card-row">
         <div className="card">
           <h4>Attendance Trend</h4>
-<<<<<<< Updated upstream
-          <p style={{ fontSize: 28, margin: 0 }}>{Math.round(attendance_rate * 100)}%</p>
-          <p style={{ color: '#888', fontSize: 12 }}>Term-to-date average</p>
-        </div>
-        <div style={{ flex: 1, border: '1px dashed #999', borderRadius: 6, padding: 16, background: '#fafafa' }}>
-          <h4>AI Summary (Claude via Bedrock)</h4>
-          <p style={{ color: '#999', fontSize: 12 }}>Reserved for Sprint 2 — plain-language summary will render here.</p>
-        </div>
-      </div>
-
-      <h4>Students Below 70% Attendance ({chronic_absenteeism_count})</h4>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
-            <th>Class</th>
-=======
           <p className="big-stat">
             {stats.overallRate !== null ? `${Math.round(stats.overallRate * 100)}%` : '—'}
           </p>
@@ -359,7 +329,9 @@ export default function Admin() {
           {summaryError && <p className="text-error">{summaryError}</p>}
           {summary && (
             <>
-              <p style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{summary.summary}</p>
+              <div style={{ fontSize: 13 }} className="markdown-body">
+                <ReactMarkdown>{summary.summary}</ReactMarkdown>
+              </div>
               <p className="subtext" style={{ fontSize: 10 }}>
                 Generated at {new Date(summary.generated_at).toLocaleString()}
               </p>
@@ -374,23 +346,11 @@ export default function Admin() {
         <thead>
           <tr>
             <th>Student</th>
->>>>>>> Stashed changes
             <th>Attendance rate</th>
             <th>Absences</th>
           </tr>
         </thead>
         <tbody>
-<<<<<<< Updated upstream
-          {class_summaries.map((c) => (
-            <tr key={c.class_id} style={{ borderBottom: '1px solid #eee' }}>
-              <td style={{ padding: '8px 0' }}>{c.class_id}</td>
-              <td>{Math.round(c.attendance_rate * 100)}%</td>
-              <td>{c.absent_count}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-=======
           {stats.chronic.map((c) => (
             <tr key={c.student.id}>
               <td>{c.student.first_name} {c.student.last_name}</td>
@@ -434,7 +394,6 @@ export default function Admin() {
         </form>
         {addStudentError && <p className="text-error" style={{ marginTop: 8 }}>{addStudentError}</p>}
       </div>
->>>>>>> Stashed changes
     </div>
   )
 }
