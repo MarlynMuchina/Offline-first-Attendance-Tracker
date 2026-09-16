@@ -1,14 +1,25 @@
+<<<<<<< HEAD
+=======
+import ReactMarkdown from 'react-markdown'
+>>>>>>> feature/react-pwa-scaffold
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
 import { signOut } from 'aws-amplify/auth'
 import jsPDF from 'jspdf'
+<<<<<<< HEAD
+=======
+import { getChronicThreshold } from '../lib/settings'
+>>>>>>> feature/react-pwa-scaffold
 
 const client = generateClient()
 
 const SCHOOL_ID = 'school-001'
 const CLASS_ID = 'class-form2east'
+<<<<<<< HEAD
 const CHRONIC_THRESHOLD = 0.7
+=======
+>>>>>>> feature/react-pwa-scaffold
 
 const listStudentsQuery = /* GraphQL */ `
   query ListStudentsByClass($classId: ID) {
@@ -68,7 +79,11 @@ function defaultDateRange() {
   return { startDate: fmt(start), endDate: fmt(end) }
 }
 
+<<<<<<< HEAD
 function computeStats(students, records) {
+=======
+function computeStats(students, records, threshold) {
+>>>>>>> feature/react-pwa-scaffold
   const byStudent = {}
   for (const s of students) {
     byStudent[s.id] = { student: s, total: 0, attended: 0, absent: 0 }
@@ -96,7 +111,11 @@ function computeStats(students, records) {
       : null
 
   const chronic = perStudent
+<<<<<<< HEAD
     .filter((p) => p.rate !== null && p.rate < CHRONIC_THRESHOLD)
+=======
+    .filter((p) => p.rate !== null && p.rate < threshold)
+>>>>>>> feature/react-pwa-scaffold
     .sort((a, b) => a.rate - b.rate)
 
   return { perStudent, overallRate, chronic }
@@ -132,7 +151,11 @@ export default function Admin() {
       ])
       const students = studentsRes.data.listStudents.items
       const records = recordsRes.data.listAttendanceRecords.items
+<<<<<<< HEAD
       setStats(computeStats(students, records))
+=======
+      setStats(computeStats(students, records, getChronicThreshold()))
+>>>>>>> feature/react-pwa-scaffold
     } catch (err) {
       console.error('Failed to load dashboard data:', err)
       const detail = err.errors?.map((e) => e.message).join('; ') || err.message || JSON.stringify(err)
@@ -200,8 +223,11 @@ export default function Admin() {
     }
   }
 
+<<<<<<< HEAD
   // Builds a real PDF entirely in the browser — no server involved.
   // Sprint 3 deliverable (Sasha): admin config panel + PDF export.
+=======
+>>>>>>> feature/react-pwa-scaffold
   function handleExportPDF() {
     if (!stats) return
 
@@ -274,6 +300,7 @@ export default function Admin() {
   }
 
   const signOutButton = (
+<<<<<<< HEAD
     <button
       onClick={async () => {
         await signOut()
@@ -281,26 +308,44 @@ export default function Admin() {
       }}
       style={{ fontSize: 12, padding: '4px 10px' }}
     >
+=======
+    <button onClick={async () => { await signOut(); navigate('/login') }} className="btn btn-small">
+>>>>>>> feature/react-pwa-scaffold
       Sign Out
     </button>
   )
 
   if (loading) {
+<<<<<<< HEAD
     return <div style={{ textAlign: 'center', marginTop: 80 }}>Loading dashboard…</div>
+=======
+    return <div className="page" style={{ textAlign: 'center', marginTop: 80 }}>Loading dashboard…</div>
+>>>>>>> feature/react-pwa-scaffold
   }
 
   if (error) {
     return (
+<<<<<<< HEAD
       <div style={{ maxWidth: 700, margin: '80px auto', fontFamily: 'sans-serif', textAlign: 'center' }}>
         <h3>Couldn't load dashboard data</h3>
         <p style={{ color: 'red', fontSize: 13 }}>{error}</p>
         <button onClick={loadData} style={{ marginRight: 8 }}>Retry</button>
         {signOutButton}
+=======
+      <div className="page" style={{ textAlign: 'center', marginTop: 80 }}>
+        <h3>Couldn't load dashboard data</h3>
+        <p className="text-error">{error}</p>
+        <div className="button-group" style={{ justifyContent: 'center' }}>
+          <button onClick={loadData} className="btn">Retry</button>
+          {signOutButton}
+        </div>
+>>>>>>> feature/react-pwa-scaffold
       </div>
     )
   }
 
   if (!stats) {
+<<<<<<< HEAD
     return <div style={{ textAlign: 'center', marginTop: 80 }}>No data available.</div>
   }
 
@@ -346,15 +391,63 @@ export default function Admin() {
               <button onClick={handleGenerateSummary} style={{ fontSize: 11, padding: '4px 8px' }}>
                 Regenerate
               </button>
+=======
+    return <div className="page" style={{ textAlign: 'center', marginTop: 80 }}>No data available.</div>
+  }
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <h2>Administrator Dashboard</h2>
+        <div className="button-group">
+          <button onClick={handleExportPDF} className="btn btn-small">Export PDF</button>
+          <button onClick={() => navigate('/admin/settings')} className="btn btn-small">Settings</button>
+          {signOutButton}
+        </div>
+      </div>
+      <p className="subtext">Showing data from {startDate} to {endDate}</p>
+
+      <div className="card-row">
+        <div className="card">
+          <h4>Attendance Trend</h4>
+          <p className="big-stat">
+            {stats.overallRate !== null ? `${Math.round(stats.overallRate * 100)}%` : '—'}
+          </p>
+          <p className="subtext">Average over selected range</p>
+        </div>
+
+        <div className="card card-dashed">
+          <h4>AI Summary (Claude via Bedrock)</h4>
+          {!summary && !summaryLoading && (
+            <button onClick={handleGenerateSummary} className="btn btn-small">Generate Summary</button>
+          )}
+          {summaryLoading && <p className="subtext">Generating…</p>}
+          {summaryError && <p className="text-error">{summaryError}</p>}
+          {summary && (
+            <>
+              <div style={{ fontSize: 13 }} className="markdown-body">
+                <ReactMarkdown>{summary.summary}</ReactMarkdown>
+              </div>
+              <p className="subtext" style={{ fontSize: 10 }}>
+                Generated at {new Date(summary.generated_at).toLocaleString()}
+              </p>
+              <button onClick={handleGenerateSummary} className="btn btn-small">Regenerate</button>
+>>>>>>> feature/react-pwa-scaffold
             </>
           )}
         </div>
       </div>
 
       <h4>Students Below 70% Attendance ({stats.chronic.length})</h4>
+<<<<<<< HEAD
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
+=======
+      <table>
+        <thead>
+          <tr>
+>>>>>>> feature/react-pwa-scaffold
             <th>Student</th>
             <th>Attendance rate</th>
             <th>Absences</th>
@@ -362,17 +455,26 @@ export default function Admin() {
         </thead>
         <tbody>
           {stats.chronic.map((c) => (
+<<<<<<< HEAD
             <tr key={c.student.id} style={{ borderBottom: '1px solid #eee' }}>
               <td style={{ padding: '8px 0' }}>
                 {c.student.first_name} {c.student.last_name}
               </td>
+=======
+            <tr key={c.student.id}>
+              <td>{c.student.first_name} {c.student.last_name}</td>
+>>>>>>> feature/react-pwa-scaffold
               <td>{Math.round(c.rate * 100)}%</td>
               <td>{c.absent}</td>
             </tr>
           ))}
           {stats.chronic.length === 0 && (
             <tr>
+<<<<<<< HEAD
               <td colSpan={3} style={{ padding: '12px 0', color: '#888' }}>
+=======
+              <td colSpan={3} className="subtext" style={{ padding: '12px 6px' }}>
+>>>>>>> feature/react-pwa-scaffold
                 No students currently below the threshold.
               </td>
             </tr>
@@ -380,6 +482,7 @@ export default function Admin() {
         </tbody>
       </table>
 
+<<<<<<< HEAD
       <div style={{ marginTop: 32, borderTop: '1px solid #ddd', paddingTop: 20 }}>
         <h4>Add Student to Form 2 East</h4>
         <form onSubmit={handleAddStudent} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -403,10 +506,26 @@ export default function Admin() {
           </div>
           <div>
             <label style={{ display: 'block', fontSize: 12 }}>Guardian phone (optional)</label>
+=======
+      <div className="section-divider">
+        <h4>Add Student to Form 2 East</h4>
+        <form onSubmit={handleAddStudent} className="form-row">
+          <div>
+            <label className="field-label">First name</label>
+            <input value={newFirstName} onChange={(e) => setNewFirstName(e.target.value)} required className="input" />
+          </div>
+          <div>
+            <label className="field-label">Last name</label>
+            <input value={newLastName} onChange={(e) => setNewLastName(e.target.value)} required className="input" />
+          </div>
+          <div>
+            <label className="field-label">Guardian phone (optional)</label>
+>>>>>>> feature/react-pwa-scaffold
             <input
               value={newGuardianPhone}
               onChange={(e) => setNewGuardianPhone(e.target.value)}
               placeholder="+2547XXXXXXXX"
+<<<<<<< HEAD
               style={{ padding: 6 }}
             />
           </div>
@@ -415,6 +534,16 @@ export default function Admin() {
           </button>
         </form>
         {addStudentError && <p style={{ color: 'red', fontSize: 12, marginTop: 8 }}>{addStudentError}</p>}
+=======
+              className="input"
+            />
+          </div>
+          <button type="submit" disabled={addingStudent} className="btn btn-primary">
+            {addingStudent ? 'Adding…' : 'Add Student'}
+          </button>
+        </form>
+        {addStudentError && <p className="text-error" style={{ marginTop: 8 }}>{addStudentError}</p>}
+>>>>>>> feature/react-pwa-scaffold
       </div>
     </div>
   )
