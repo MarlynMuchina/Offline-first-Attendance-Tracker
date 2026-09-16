@@ -146,7 +146,7 @@ export default function Admin() {
   const [addingStudent, setAddingStudent] = useState(false)
   const [addStudentError, setAddStudentError] = useState('')
 
-    const loadData = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
@@ -158,8 +158,6 @@ export default function Admin() {
           'listAttendanceRecords'
         ),
       ])
-      const students = studentsRes.data.listStudents.items
-      const records = recordsRes.data.listAttendanceRecords.items
       setStats(computeStats(students, records, getChronicThreshold()))
     } catch (err) {
       console.error('Failed to load dashboard data:', err)
