@@ -1,0 +1,6 @@
+class_id,school_id,class_name,total_enrolled,term_length,term_dates
+SCH01-FORM2NORTH,SCH01,Form 2 North,36,"48 school days (~10 weeks, Mon-Fri, minus a 2-day mid-term break)",2026-05-04 to 2026-07-10
+SCH02-FORM3EAST,SCH02,Form 3 East,34,"48 school days (~10 weeks, Mon-Fri, minus a 2-day mid-term break)",2026-05-04 to 2026-07-10
+SCH03-FORM1WEST,SCH03,Form 1 West,38,"48 school days (~10 weeks, Mon-Fri, minus a 2-day mid-term break)",2026-05-04 to 2026-07-10
+SCH04-FORM4SOUTH,SCH04,Form 4 South,32,"48 school days (~10 weeks, Mon-Fri, minus a 2-day mid-term break)",2026-05-04 to 2026-07-10
+SCH05-FORM2CENTRAL,SCH05,Form 2 Central,40,"48 school days (~10 weeks, Mon-Fri, minus a 2-day mid-term break)",2026-05-04 to 2026-07-10

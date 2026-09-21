@@ -1,0 +1,181 @@
+student_id,admission_no,student_name,gender,school_id,school_name,class_id,class_name
+SCH01-S001,SCH01-ADM-2024001,Hillary Wanjiru,M,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S002,SCH01-ADM-2024002,Ruth Chebet,F,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S003,SCH01-ADM-2024003,Oscar Wafula,M,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S004,SCH01-ADM-2024004,Grace Mbugua,F,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S005,SCH01-ADM-2024005,Felix Mumbi,M,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S006,SCH01-ADM-2024006,Eunice Kamau,F,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S007,SCH01-ADM-2024007,Kevin Njoroge,M,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S008,SCH01-ADM-2024008,Naomi Omondi,F,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S009,SCH01-ADM-2024009,Duncan Cheruiyot,M,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S010,SCH01-ADM-2024010,Brenda Atieno,F,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S011,SCH01-ADM-2024011,Michael Mbugua,M,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S012,SCH01-ADM-2024012,Doreen Omondi,F,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S013,SCH01-ADM-2024013,Dickson Mumbi,M,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S014,SCH01-ADM-2024014,Ruth Otieno,F,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S015,SCH01-ADM-2024015,Kelvin Odhiambo,M,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S016,SCH01-ADM-2024016,Violet Auma,F,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S017,SCH01-ADM-2024017,John Wambui,M,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S018,SCH01-ADM-2024018,Violet Kiptoo,F,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S019,SCH01-ADM-2024019,Felix Kosgei,M,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S020,SCH01-ADM-2024020,Grace Maina,F,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S021,SCH01-ADM-2024021,Charles Cheruiyot,M,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S022,SCH01-ADM-2024022,Quinter Kamau,F,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S023,SCH01-ADM-2024023,Elvis Mbugua,M,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S024,SCH01-ADM-2024024,Hellen Kosgei,F,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S025,SCH01-ADM-2024025,Felix Atieno,M,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S026,SCH01-ADM-2024026,Sharon Kavata,F,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S027,SCH01-ADM-2024027,Daniel Kilonzo,M,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S028,SCH01-ADM-2024028,Mercy Mutua,F,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S029,SCH01-ADM-2024029,Collins Omondi,M,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S030,SCH01-ADM-2024030,Sharon Njoroge,F,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S031,SCH01-ADM-2024031,Oscar Kiptoo,M,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S032,SCH01-ADM-2024032,Beatrice Auma,F,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S033,SCH01-ADM-2024033,Elvis Akinyi,M,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S034,SCH01-ADM-2024034,Kendi Akinyi,F,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S035,SCH01-ADM-2024035,Charles Wambui,M,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH01-S036,SCH01-ADM-2024036,Ruth Mutua,F,SCH01,"Baraka Mixed Secondary School (SCH01, Mixed)",SCH01-FORM2NORTH,Form 2 North
+SCH02-S001,SCH02-ADM-2024001,Joy Kavata,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S002,SCH02-ADM-2024002,Winnie Mwangi,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S003,SCH02-ADM-2024003,Millicent Cheruiyot,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S004,SCH02-ADM-2024004,Linet Kosgei,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S005,SCH02-ADM-2024005,Sharon Kavata,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S006,SCH02-ADM-2024006,Eunice Kilonzo,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S007,SCH02-ADM-2024007,Onalisa Kamau,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S008,SCH02-ADM-2024008,Khadija Mbugua,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S009,SCH02-ADM-2024009,Rehema Nafula,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S010,SCH02-ADM-2024010,Florence Omondi,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S011,SCH02-ADM-2024011,Josephine Wafula,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S012,SCH02-ADM-2024012,Faith Achieng,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S013,SCH02-ADM-2024013,Linet Cheruiyot,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S014,SCH02-ADM-2024014,Nancy Kariuki,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S015,SCH02-ADM-2024015,Josephine Omondi,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S016,SCH02-ADM-2024016,Khadija Nafula,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S017,SCH02-ADM-2024017,Joy Gathoni,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S018,SCH02-ADM-2024018,Rehema Muthoni,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S019,SCH02-ADM-2024019,Halima Mutua,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S020,SCH02-ADM-2024020,Purity Kavata,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S021,SCH02-ADM-2024021,Faith Njeri,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S022,SCH02-ADM-2024022,Beatrice Kiprono,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S023,SCH02-ADM-2024023,Josephine Odhiambo,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S024,SCH02-ADM-2024024,Peris Odhiambo,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S025,SCH02-ADM-2024025,Cynthia Wafula,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S026,SCH02-ADM-2024026,Kendi Akinyi,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S027,SCH02-ADM-2024027,Naomi Mutua,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S028,SCH02-ADM-2024028,Onalisa Chebet,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S029,SCH02-ADM-2024029,Sharon Odhiambo,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S030,SCH02-ADM-2024030,Irene Atieno,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S031,SCH02-ADM-2024031,Rehema Kariuki,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S032,SCH02-ADM-2024032,Ruth Onyango,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S033,SCH02-ADM-2024033,Halima Mbugua,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH02-S034,SCH02-ADM-2024034,Florence Rotich,F,SCH02,"Girls Secondary School (SCH02, Girls)",SCH02-FORM3EAST,Form 3 East
+SCH03-S001,SCH03-ADM-2024001,Faith Kamau,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S002,SCH03-ADM-2024002,Ivy Cheruiyot,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S003,SCH03-ADM-2024003,Naomi Wanjiru,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S004,SCH03-ADM-2024004,Peris Kimani,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S005,SCH03-ADM-2024005,Rehema Chebet,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S006,SCH03-ADM-2024006,Brenda Chebet,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S007,SCH03-ADM-2024007,Winnie Kiptoo,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S008,SCH03-ADM-2024008,Irene Adhiambo,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S009,SCH03-ADM-2024009,Grace Atieno,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S010,SCH03-ADM-2024010,Winnie Kilonzo,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S011,SCH03-ADM-2024011,Quinter Mumbi,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S012,SCH03-ADM-2024012,Beatrice Kariuki,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S013,SCH03-ADM-2024013,Mercy Gathoni,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S014,SCH03-ADM-2024014,Grace Wairimu,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S015,SCH03-ADM-2024015,Esther Jepkosgei,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S016,SCH03-ADM-2024016,Peris Jepkosgei,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S017,SCH03-ADM-2024017,Quinter Kavata,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S018,SCH03-ADM-2024018,Linet Adhiambo,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S019,SCH03-ADM-2024019,Brenda Kosgei,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S020,SCH03-ADM-2024020,Peris Wafula,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S021,SCH03-ADM-2024021,Halima Rotich,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S022,SCH03-ADM-2024022,Agnes Mutua,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S023,SCH03-ADM-2024023,Halima Barasa,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S024,SCH03-ADM-2024024,Eunice Njeri,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S025,SCH03-ADM-2024025,Ursula Achieng,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S026,SCH03-ADM-2024026,Olive Nyambura,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S027,SCH03-ADM-2024027,Catherine Wafula,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S028,SCH03-ADM-2024028,Faith Njoroge,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S029,SCH03-ADM-2024029,Esther Wekesa,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S030,SCH03-ADM-2024030,Naomi Kimani,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S031,SCH03-ADM-2024031,Quinter Barasa,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S032,SCH03-ADM-2024032,Ivy Rotich,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S033,SCH03-ADM-2024033,Esther Kamau,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S034,SCH03-ADM-2024034,Linet Muthoni,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S035,SCH03-ADM-2024035,Catherine Ochieng,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S036,SCH03-ADM-2024036,Khadija Kamau,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S037,SCH03-ADM-2024037,Violet Wafula,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH03-S038,SCH03-ADM-2024038,Winnie Akinyi,F,SCH03,"Girls Secondary School (SCH03, Girls)",SCH03-FORM1WEST,Form 1 West
+SCH04-S001,SCH04-ADM-2024001,Ian Wambui,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S002,SCH04-ADM-2024002,Humphrey Rotich,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S003,SCH04-ADM-2024003,Dickson Achieng,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S004,SCH04-ADM-2024004,Oscar Wairimu,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S005,SCH04-ADM-2024005,Peter Mumbi,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S006,SCH04-ADM-2024006,Oscar Achieng,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S007,SCH04-ADM-2024007,Dennis Barasa,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S008,SCH04-ADM-2024008,Robert Njoroge,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S009,SCH04-ADM-2024009,Victor Kosgei,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S010,SCH04-ADM-2024010,Ian Nyambura,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S011,SCH04-ADM-2024011,Erick Jepkosgei,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S012,SCH04-ADM-2024012,Harrison Akinyi,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S013,SCH04-ADM-2024013,Joseph Wambui,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S014,SCH04-ADM-2024014,Victor Kilonzo,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S015,SCH04-ADM-2024015,Joseph Jepkosgei,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S016,SCH04-ADM-2024016,Wycliffe Kiptoo,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S017,SCH04-ADM-2024017,Kelvin Auma,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S018,SCH04-ADM-2024018,Joseph Onyango,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S019,SCH04-ADM-2024019,Enock Wekesa,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S020,SCH04-ADM-2024020,Dickson Kiptoo,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S021,SCH04-ADM-2024021,Charles Mumbi,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S022,SCH04-ADM-2024022,Nicholas Barasa,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S023,SCH04-ADM-2024023,Lewis Kimani,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S024,SCH04-ADM-2024024,Erick Mutua,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S025,SCH04-ADM-2024025,Felix Otieno,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S026,SCH04-ADM-2024026,Titus Jepkosgei,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S027,SCH04-ADM-2024027,Dennis Wekesa,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S028,SCH04-ADM-2024028,Daniel Akinyi,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S029,SCH04-ADM-2024029,Peter Kiprono,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S030,SCH04-ADM-2024030,Lewis Njeri,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S031,SCH04-ADM-2024031,Elvis Adhiambo,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH04-S032,SCH04-ADM-2024032,Kevin Omondi,M,SCH04,"Boys Secondary School (SCH04, Boys)",SCH04-FORM4SOUTH,Form 4 South
+SCH05-S001,SCH05-ADM-2024001,Collins Nyambura,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S002,SCH05-ADM-2024002,Elvis Kiptoo,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S003,SCH05-ADM-2024003,Kibet Kilonzo,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S004,SCH05-ADM-2024004,Geoffrey Kiptoo,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S005,SCH05-ADM-2024005,Fred Mumbi,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S006,SCH05-ADM-2024006,Victor Omondi,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S007,SCH05-ADM-2024007,Enock Kiprono,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S008,SCH05-ADM-2024008,Duncan Njeri,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S009,SCH05-ADM-2024009,Brian Wekesa,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S010,SCH05-ADM-2024010,Enock Kariuki,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S011,SCH05-ADM-2024011,Francis Maina,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S012,SCH05-ADM-2024012,Titus Barasa,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S013,SCH05-ADM-2024013,Kelvin Ochieng,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S014,SCH05-ADM-2024014,Kibet Onyango,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S015,SCH05-ADM-2024015,Erick Rotich,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S016,SCH05-ADM-2024016,Kevin Mbugua,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S017,SCH05-ADM-2024017,Boniface Achieng,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S018,SCH05-ADM-2024018,Oscar Wekesa,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S019,SCH05-ADM-2024019,Felix Muthoni,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S020,SCH05-ADM-2024020,Robert Kilonzo,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S021,SCH05-ADM-2024021,Alex Mumbi,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S022,SCH05-ADM-2024022,Oscar Kosgei,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S023,SCH05-ADM-2024023,Dickson Auma,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S024,SCH05-ADM-2024024,Wycliffe Mutua,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S025,SCH05-ADM-2024025,Felix Kilonzo,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S026,SCH05-ADM-2024026,Francis Mwangi,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S027,SCH05-ADM-2024027,Titus Maina,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S028,SCH05-ADM-2024028,Collins Gathoni,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S029,SCH05-ADM-2024029,Michael Kosgei,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S030,SCH05-ADM-2024030,Boniface Mumbi,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S031,SCH05-ADM-2024031,Harrison Atieno,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S032,SCH05-ADM-2024032,Brian Odhiambo,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S033,SCH05-ADM-2024033,Kevin Cherono,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S034,SCH05-ADM-2024034,Collins Nafula,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S035,SCH05-ADM-2024035,George Cheruiyot,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S036,SCH05-ADM-2024036,Felix Atieno,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S037,SCH05-ADM-2024037,Wycliffe Odhiambo,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S038,SCH05-ADM-2024038,Hillary Cherono,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S039,SCH05-ADM-2024039,Gilbert Mwangi,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central
+SCH05-S040,SCH05-ADM-2024040,Duncan Wanjiru,M,SCH05,"Boys Secondary School (SCH05, Boys)",SCH05-FORM2CENTRAL,Form 2 Central

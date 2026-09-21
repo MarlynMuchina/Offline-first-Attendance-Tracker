@@ -1,14 +1,13 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
 import { getCurrentUser, signOut } from 'aws-amplify/auth'
 import { db } from '../lib/db'
 import { startSyncEngine, syncPendingAttendance, stopSyncEngine } from '../lib/syncEngine'
 import { getQueueHealth } from '../lib/storageQuotaManager'
+import { getCurrentUserContext, getClassIdForSchool } from '../lib/auth'
 
 const client = generateClient()
-
-const CLASS_ID = 'class-form2east' // TODO: replace with real class context once Admin module exists
 
 const listStudentsQuery = /* GraphQL */ `
   query ListStudents($classId: ID!) {
@@ -27,76 +26,85 @@ const today = () => new Date().toISOString().split('T')[0]
 
 export default function Teacher() {
   const navigate = useNavigate()
+  const [classId, setClassId] = useState(null)
+  const [schoolId, setSchoolId] = useState(null)
   const [students, setStudents] = useState([])
   const [queueRecords, setQueueRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
-
   const [syncing, setSyncing] = useState(false)
-
   const [storageWarning, setStorageWarning] = useState(null)
+  const [contextError, setContextError] = useState('')
+  const classIdRef = useRef(null)
 
-  // Load roster: try network first, fall back to local cache if offline.
-  const loadStudents = useCallback(async () => {
+  const loadStudents = useCallback(async (resolvedClassId) => {
     try {
       const res = await client.graphql({
         query: listStudentsQuery,
-        variables: { classId: CLASS_ID },
+        variables: { classId: resolvedClassId },
       })
       const fresh = res.data.listStudents.items
       await db.students.bulkPut(fresh)
       setStudents(fresh)
     } catch (err) {
       console.warn('Could not fetch roster from server, using local cache:', err.message)
-      const cached = await db.students.where('class_id').equals(CLASS_ID).toArray()
+      const cached = await db.students.where('class_id').equals(resolvedClassId).toArray()
       setStudents(cached)
     }
   }, [])
 
-  // Load today's queue entries for this class from Dexie (always local, always works).
-  const loadQueue = useCallback(async () => {
+  const loadQueue = useCallback(async (resolvedClassId) => {
     const records = await db.attendanceQueue
       .where('class_id')
-      .equals(CLASS_ID)
+      .equals(resolvedClassId)
       .and((r) => r.date === today())
       .toArray()
     setQueueRecords(records)
   }, [])
 
   useEffect(() => {
-  async function init() {
-    setLoading(true)
-    await loadStudents()
-    await loadQueue()
-    setLoading(false)
-  }
-  init()
-  startSyncEngine()
+    async function init() {
+      setLoading(true)
+      try {
+        const { schoolId: sid } = await getCurrentUserContext()
+        setSchoolId(sid)
+        const resolvedClassId = await getClassIdForSchool(sid)
+        setClassId(resolvedClassId)
+        classIdRef.current = resolvedClassId
+        await loadStudents(resolvedClassId)
+        await loadQueue(resolvedClassId)
+      } catch (err) {
+        console.error('Failed to resolve school/class context:', err)
+        setContextError(err.message)
+      } finally {
+        setLoading(false)
+      }
+      startSyncEngine()
 
-  function handleOnline() {
-    setIsOnline(true)
-    syncPendingAttendance().then(loadQueue)
-  }
-  function handleOffline() {
-    setIsOnline(false)
-  }
-  window.addEventListener('online', handleOnline)
-  window.addEventListener('offline', handleOffline)
+      function handleOnline() {
+        setIsOnline(true)
+        syncPendingAttendance().then(() => loadQueue(classIdRef.current))
+      }
+      function handleOffline() { setIsOnline(false) }
+      window.addEventListener('online', handleOnline)
+      window.addEventListener('offline', handleOffline)
 
-    const interval = setInterval(() => {
-    syncPendingAttendance().then(loadQueue)
-    getQueueHealth().then((health) => {
-      setStorageWarning(health.criticalUnsynced ? health : null)
-    })
-  }, 10000)
+      const interval = setInterval(() => {
+        syncPendingAttendance().then(() => loadQueue(classId))
+        getQueueHealth().then((health) => {
+          setStorageWarning(health.criticalUnsynced ? health : null)
+        })
+      }, 10000)
 
-  return () => {
-    window.removeEventListener('online', handleOnline)
-    window.removeEventListener('offline', handleOffline)
-    clearInterval(interval)
-    stopSyncEngine()
-  }
-}, [loadStudents, loadQueue])
+      return () => {
+        window.removeEventListener('online', handleOnline)
+        window.removeEventListener('offline', handleOffline)
+        clearInterval(interval)
+        stopSyncEngine()
+      }
+    }
+    init()
+  }, [loadStudents, loadQueue])
 
     async function markStatus(studentId, status) {
     const markedAt = new Date().toISOString()
@@ -124,7 +132,7 @@ export default function Teacher() {
     } else {
       await db.attendanceQueue.add({
         student_id: studentId,
-        class_id: CLASS_ID,
+        class_id: classId,
         date: today(),
         status,
         marked_at: markedAt,
@@ -135,8 +143,8 @@ export default function Teacher() {
       })
     }
 
-    await loadQueue()
-    syncPendingAttendance().then(loadQueue) // fire-and-forget; refresh status once it settles
+    await loadQueue(classIdRef.current)
+    syncPendingAttendance().then(() => loadQueue(classIdRef.current)) // fire-and-forget; refresh status once it settles
   }
 
   async function markAllPresent() {
@@ -148,7 +156,7 @@ export default function Teacher() {
   async function handleManualSync() {
   setSyncing(true)
   await syncPendingAttendance()
-  await loadQueue()
+  await loadQueue(classIdRef.current)
   setSyncing(false)
 }
 
@@ -169,7 +177,7 @@ export default function Teacher() {
   return (
     <div style={{ maxWidth: 700, margin: '40px auto', fontFamily: 'sans-serif' }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-  <h2>Teacher Dashboard — Form 2 East</h2>
+  <h2>Teacher Dashboard — {schoolId}</h2>
   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
     <span
       style={{

@@ -129,6 +129,7 @@ const sendSmsFn = new lambda.Function(this, 'SendSmsAlertFunction', {
   environment: {
     NOTIFICATION_TABLE: notificationTable.tableName,
     AT_SECRET_NAME: 'csg-africastalking-credentials',
+    NODE_OPTIONS: '--tls-min-v1.0', // Node 18's OpenSSL 3.x defaults reject Africa's Talking sandbox's TLS handshake — see issue #34
   },
 });
 
@@ -157,8 +158,17 @@ atSecret.grantRead(sendSmsFn);
         'arn:aws:bedrock:eu-south-1::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0',
         'arn:aws:bedrock:eu-south-2::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0',
         'arn:aws:bedrock:eu-west-3::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0',
+        
       ],
+      
     }));
+    attendanceSummaryFn.addToRolePolicy(new iam.PolicyStatement({
+  actions: [
+    'aws-marketplace:ViewSubscriptions',
+    'aws-marketplace:Subscribe',
+  ],
+  resources: ['*'], // AWS requires '*' for these specific Marketplace actions — scoping to an ARN isn't supported
+}));
 
     // ---- GraphQL API ----
     this.api = new AmplifyGraphqlApi(this, 'AttendanceApi', {

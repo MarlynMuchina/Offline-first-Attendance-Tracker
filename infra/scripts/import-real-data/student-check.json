@@ -1,0 +1,247 @@
+{
+    "Items": [
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "LATE"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "ABSENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        },
+        {
+            "status": {
+                "S": "PRESENT"
+            }
+        }
+    ],
+    "Count": 48,
+    "ScannedCount": 48,
+    "ConsumedCapacity": null
+}
