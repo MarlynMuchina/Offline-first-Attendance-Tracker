@@ -32,9 +32,7 @@ export class AuthStack extends cdk.Stack {
         phoneNumber: { required: false, mutable: true },
       },
       customAttributes: {
-        // used by Lambda resolvers to enforce the school_id tenant boundary
-        // (CSG platform standard: every request validated against school_id)
-        school_id: new cognito.StringAttribute({ mutable: false }),
+      school_id: new cognito.StringAttribute({ mutable: true }),
       },
       passwordPolicy: {
         minLength: 10,

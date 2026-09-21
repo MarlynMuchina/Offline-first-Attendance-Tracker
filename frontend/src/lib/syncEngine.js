@@ -2,6 +2,7 @@ import { generateClient } from 'aws-amplify/api'
 import { getCurrentUser } from 'aws-amplify/auth'
 import { db } from './db'
 import { runStorageMaintenance } from './storageQuotaManager'
+import { getCurrentUserContext } from './auth'
 
 const client = generateClient()
 
@@ -15,8 +16,6 @@ const markAttendance = /* GraphQL */ `
     }
   }
 `
-
-const SCHOOL_ID = 'school-001' // TODO: replace with real school context once Admin module exists
 
 let syncInProgress = false
 
@@ -34,21 +33,23 @@ export async function syncPendingAttendance() {
     if (pending.length === 0) return
 
     let user
+    let schoolId
     try {
       user = await getCurrentUser()
+      const ctx = await getCurrentUserContext()
+      schoolId = ctx.schoolId
     } catch {
       return
     }
 
     for (const record of pending) {
       await db.attendanceQueue.update(record.localId, { sync_status: 'SYNCING' })
-
-            try {
+      try {
         const result = await client.graphql({
           query: markAttendance,
           variables: {
             input: {
-              school_id: SCHOOL_ID,
+              school_id: schoolId,
               student_id: record.student_id,
               class_id: record.class_id,
               date: record.date,

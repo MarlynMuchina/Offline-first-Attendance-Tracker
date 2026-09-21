@@ -1,0 +1,29 @@
+{
+  "name": "offline-first-attendance-tracker",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MarlynMuchina/Offline-first-Attendance-Tracker.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/MarlynMuchina/Offline-first-Attendance-Tracker/issues"
+  },
+  "homepage": "https://github.com/MarlynMuchina/Offline-first-Attendance-Tracker#readme",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1136.0",
+    "@aws-sdk/lib-dynamodb": "^3.1136.0",
+    "csv-parse": "^7.0.2"
+  }
+}

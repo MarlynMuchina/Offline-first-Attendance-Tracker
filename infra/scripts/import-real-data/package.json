@@ -1,0 +1,18 @@
+{
+  "name": "import-real-data",
+  "version": "1.0.0",
+  "description": "",
+  "main": "import-real-data.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1136.0",
+    "@aws-sdk/lib-dynamodb": "^3.1136.0",
+    "csv-parse": "^7.0.2"
+  }
+}

@@ -1,3 +1,4 @@
+import { getCurrentUserContext, getClassIdForSchool } from '../lib/auth'
 import ReactMarkdown from 'react-markdown'
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -8,8 +9,7 @@ import { getChronicThreshold } from '../lib/settings'
 
 const client = generateClient()
 
-const SCHOOL_ID = 'school-001'
-const CLASS_ID = 'class-form2east'
+
 
 const listStudentsQuery = /* GraphQL */ `
   query ListStudentsByClass($classId: ID, $nextToken: String) {
@@ -131,6 +131,9 @@ function computeStats(students, records, threshold) {
 
 export default function Admin() {
   const navigate = useNavigate()
+  const [schoolId, setSchoolId] = useState(null)
+const [classId, setClassId] = useState(null)
+const [contextError, setContextError] = useState('')
   const [{ startDate, endDate }] = useState(defaultDateRange)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -146,27 +149,43 @@ export default function Admin() {
   const [addingStudent, setAddingStudent] = useState(false)
   const [addStudentError, setAddStudentError] = useState('')
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    setError('')
+const loadData = useCallback(async () => {
+  if (!classId) return   // ← add this guard
+  setLoading(true)
+  setError('')
+  try {
+    const [students, records] = await Promise.all([
+      fetchAllPages(listStudentsQuery, { classId }, 'listStudents'),
+      fetchAllPages(
+        listAttendanceQuery,
+        { classId, startDate, endDate },
+        'listAttendanceRecords'
+      ),
+    ])
+    setStats(computeStats(students, records, getChronicThreshold()))
+  } catch (err) {
+    console.error('Failed to load dashboard data:', err)
+    const detail = err.errors?.map((e) => e.message).join('; ') || err.message || JSON.stringify(err)
+    setError(detail)
+  } finally {
+    setLoading(false)
+  }
+}, [classId, startDate, endDate])  // ← add classId to deps
+
+useEffect(() => {
+  async function resolveContext() {
     try {
-      const [students, records] = await Promise.all([
-        fetchAllPages(listStudentsQuery, { classId: CLASS_ID }, 'listStudents'),
-        fetchAllPages(
-          listAttendanceQuery,
-          { classId: CLASS_ID, startDate, endDate },
-          'listAttendanceRecords'
-        ),
-      ])
-      setStats(computeStats(students, records, getChronicThreshold()))
+      const { schoolId: sid } = await getCurrentUserContext()
+      const cid = await getClassIdForSchool(sid)
+      setSchoolId(sid)
+      setClassId(cid)
     } catch (err) {
-      console.error('Failed to load dashboard data:', err)
-      const detail = err.errors?.map((e) => e.message).join('; ') || err.message || JSON.stringify(err)
-      setError(detail)
-    } finally {
+      setContextError(err.message)
       setLoading(false)
     }
-  }, [startDate, endDate])
+  }
+  resolveContext()
+}, [])
 
   useEffect(() => {
     loadData()
@@ -179,7 +198,7 @@ export default function Admin() {
       const res = await client.graphql({
         query: generateSummaryQuery,
         variables: {
-          input: { school_id: SCHOOL_ID, class_id: CLASS_ID, start_date: startDate, end_date: endDate },
+          input: { school_id: schoolId, class_id: classId, start_date: startDate, end_date: endDate },
         },
       })
       setSummary(res.data.generateAttendanceSummary)
@@ -202,8 +221,8 @@ export default function Admin() {
         query: createStudentMutation,
         variables: {
           input: {
-            school_id: SCHOOL_ID,
-            class_id: CLASS_ID,
+            school_id: schoolId,
+            class_id: classId,
             first_name: newFirstName,
             last_name: newLastName,
             guardian_phone: newGuardianPhone || null,
@@ -233,7 +252,7 @@ export default function Admin() {
     let y = 20
 
     doc.setFontSize(16)
-    doc.text('Attendance Report — Form 2 East', 14, y)
+    doc.text(`Attendance Report — ${schoolId}`, 14, y)
     y += 8
 
     doc.setFontSize(10)
@@ -306,6 +325,16 @@ export default function Admin() {
   if (loading) {
     return <div className="page" style={{ textAlign: 'center', marginTop: 80 }}>Loading dashboard…</div>
   }
+
+  if (contextError) {
+  return (
+    <div className="page" style={{ textAlign: 'center', marginTop: 80 }}>
+      <h3>Couldn't determine your school/class</h3>
+      <p className="text-error">{contextError}</p>
+      {signOutButton}
+    </div>
+  )
+}
 
   if (error) {
     return (
@@ -394,7 +423,7 @@ export default function Admin() {
       </table>
 
       <div className="section-divider">
-        <h4>Add Student to Form 2 East</h4>
+        <h4>Add Student to {schoolId}</h4>
         <form onSubmit={handleAddStudent} className="form-row">
           <div>
             <label className="field-label">First name</label>
