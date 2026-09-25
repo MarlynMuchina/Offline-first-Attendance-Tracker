@@ -185,7 +185,30 @@ new events.Rule(this, 'ThresholdCheckRule', {
   targets: [new targets.LambdaFunction(checkThresholdFn)],
 });
 
+// ---- predictAttendanceRisk function (Phase D) ----
+// Scores a student's forward-looking attendance risk using a logistic
+// regression trained offline (infra/scripts/train-risk-model/). Coefficients
+// are bundled as a JSON file alongside the handler -- no sklearn/Python
+// runtime needed in Lambda, just plain arithmetic re-implementing the model.
+const predictAttendanceRiskFn = new lambda.Function(this, 'PredictAttendanceRiskFunction', {
+  functionName: 'predictAttendanceRiskFunction',
+  runtime: lambda.Runtime.NODEJS_18_X,
+  handler: 'index.handler',
+  timeout: cdk.Duration.seconds(15),
+  code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/predictAttendanceRisk')),
+  environment: {
+    ATTENDANCE_TABLE: attendanceTable.tableName,
+  },
+});
+
+attendanceTable.grantReadData(predictAttendanceRiskFn);
+predictAttendanceRiskFn.addToRolePolicy(new iam.PolicyStatement({
+  actions: ['dynamodb:Query'],
+  resources: [`${attendanceTable.tableArn}/index/*`],
+}));
+
     attendanceTable.grantReadData(attendanceSummaryFn);
+
     studentTable.grantReadData(attendanceSummaryFn);
     attendanceSummaryFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['dynamodb:Query'],
@@ -226,10 +249,11 @@ new events.Rule(this, 'ThresholdCheckRule', {
         defaultAuthorizationMode: 'AMAZON_COGNITO_USER_POOLS',
         userPoolConfig: { userPool: props.userPool },
       },
-      functionNameMap: {
+            functionNameMap: {
           markAttendanceFunction: markAttendanceFn,
           attendanceSummaryFunction: attendanceSummaryFn,
          sendSmsFunction: sendSmsFn,
+         predictAttendanceRiskFunction: predictAttendanceRiskFn,
       },
     });
 

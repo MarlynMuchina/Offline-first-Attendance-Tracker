@@ -54,6 +54,29 @@ const generateSummaryQuery = /* GraphQL */ `
   }
 `
 
+const predictRiskQuery = /* GraphQL */ `
+  query PredictAttendanceRisk($input: PredictAttendanceRiskInput!) {
+    predictAttendanceRisk(input: $input) {
+      student_id
+      risk_score
+      risk_level
+      reason
+    }
+  }
+`
+
+const predictClassRiskQuery = /* GraphQL */ `
+  query PredictAttendanceRiskForClass($input: PredictClassRiskInput!) {
+    predictAttendanceRiskForClass(input: $input) {
+      student_id
+      risk_score
+      risk_level
+      reason
+    }
+  }
+`
+
+
 const createStudentMutation = /* GraphQL */ `
   mutation CreateStudent($input: CreateStudentInput!) {
     createStudent(input: $input) {
@@ -141,7 +164,11 @@ const [contextError, setContextError] = useState('')
 
   const [summary, setSummary] = useState(null)
   const [summaryLoading, setSummaryLoading] = useState(false)
-  const [summaryError, setSummaryError] = useState('')
+    const [summaryError, setSummaryError] = useState('')
+
+  const [riskResults, setRiskResults] = useState({}) // { studentId: { risk_level, risk_score, reason } }
+  const [riskLoading, setRiskLoading] = useState(false)
+  const [riskError, setRiskError] = useState('')
 
   const [newFirstName, setNewFirstName] = useState('')
   const [newLastName, setNewLastName] = useState('')
@@ -210,6 +237,36 @@ useEffect(() => {
       setSummaryLoading(false)
     }
   }
+
+
+    async function handleLoadRiskScores() {
+    if (!stats) return
+    setRiskLoading(true)
+    setRiskError('')
+    try {
+      const studentIds = stats.perStudent.map((p) => p.student.id)
+      const results = await Promise.all(
+        studentIds.map((id) =>
+          client
+            .graphql({ query: predictRiskQuery, variables: { input: { student_id: id } } })
+            .then((res) => ({ id, data: res.data.predictAttendanceRisk }))
+            .catch((err) => ({ id, error: err.message || 'Failed to score' }))
+        )
+      )
+      const byId = {}
+      for (const r of results) {
+        byId[r.id] = r.data || { risk_level: 'ERROR', reason: r.error }
+      }
+      setRiskResults(byId)
+    } catch (err) {
+      console.error('Risk scoring failed:', err)
+      setRiskError(err.message || 'Failed to load risk scores')
+    } finally {
+      setRiskLoading(false)
+    }
+  }
+
+
 
   async function handleAddStudent(e) {
     e.preventDefault()
@@ -395,7 +452,7 @@ useEffect(() => {
         </div>
       </div>
 
-      <h4>Students Below 70% Attendance ({stats.chronic.length})</h4>
+            <h4>Students Below 70% Attendance ({stats.chronic.length})</h4>
       <table>
         <thead>
           <tr>
@@ -405,14 +462,14 @@ useEffect(() => {
           </tr>
         </thead>
         <tbody>
-          {stats.chronic.map((c) => (
+              {stats.chronic.map((c) => (
             <tr key={c.student.id}>
               <td>{c.student.first_name} {c.student.last_name}</td>
               <td>{Math.round(c.rate * 100)}%</td>
               <td>{c.absent}</td>
             </tr>
           ))}
-          {stats.chronic.length === 0 && (
+                    {stats.chronic.length === 0 && (
             <tr>
               <td colSpan={3} className="subtext" style={{ padding: '12px 6px' }}>
                 No students currently below the threshold.
@@ -421,6 +478,53 @@ useEffect(() => {
           )}
         </tbody>
       </table>
+
+      <div className="section-divider">
+        <h4>Predicted Attendance Risk ({stats.perStudent.length} students)</h4>
+        <p className="subtext" style={{ marginBottom: 10 }}>
+          Forward-looking estimate based on each student's recent attendance trend.
+        </p>
+        <button onClick={handleLoadRiskScores} disabled={riskLoading} className="btn btn-small" style={{ marginBottom: 12 }}>
+          {riskLoading ? 'Scoring…' : 'Run Risk Prediction'}
+        </button>
+        {riskError && <p className="text-error">{riskError}</p>}
+        {Object.keys(riskResults).length > 0 && (
+          <table>
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Current rate</th>
+                <th>Predicted risk</th>
+                <th>Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...stats.perStudent]
+                .filter((p) => riskResults[p.student.id])
+                .sort((a, b) => (riskResults[b.student.id]?.risk_score ?? 0) - (riskResults[a.student.id]?.risk_score ?? 0))
+                .map((p) => {
+                  const risk = riskResults[p.student.id]
+                  return (
+                    <tr key={p.student.id}>
+                      <td>{p.student.first_name} {p.student.last_name}</td>
+                      <td>{p.rate !== null ? `${Math.round(p.rate * 100)}%` : '—'}</td>
+                      <td>
+                        <span style={{
+                          fontSize: 11, padding: '2px 8px', borderRadius: 10,
+                          color: risk.risk_level === 'HIGH' ? '#c00' : risk.risk_level === 'MEDIUM' ? '#c80' : '#080',
+                          border: '1px solid currentColor',
+                        }}>
+                          {risk.risk_level}
+                        </span>
+                      </td>
+                      <td className="subtext" style={{ fontSize: 12 }}>{risk.reason}</td>
+                    </tr>
+                  )
+                })}
+            </tbody>
+          </table>
+        )}
+      </div>
 
       <div className="section-divider">
         <h4>Add Student to {schoolId}</h4>
