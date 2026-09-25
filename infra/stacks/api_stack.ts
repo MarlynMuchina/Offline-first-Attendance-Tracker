@@ -136,7 +136,54 @@ const sendSmsFn = new lambda.Function(this, 'SendSmsAlertFunction', {
 notificationTable.grantWriteData(sendSmsFn);
 atSecret.grantRead(sendSmsFn);
 
+// ---- checkThreshold function (issue #35, Phase C) ----
+// Triggered by AttendanceRecorded events (ABSENT only) from markAttendanceFn.
+// Checks 3-consecutive-absence or <70%-monthly-rate, dedupes against
+// NotificationLog (7-day window), and invokes sendSmsFn directly on trigger.
+const checkThresholdFn = new lambda.Function(this, 'CheckThresholdFunction', {
+  functionName: 'checkThresholdFunction',
+  runtime: lambda.Runtime.NODEJS_18_X,
+  handler: 'index.handler',
+  timeout: cdk.Duration.seconds(30),
+  code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/checkThreshold')),
+  environment: {
+    ATTENDANCE_TABLE: attendanceTable.tableName,
+    NOTIFICATION_TABLE: notificationTable.tableName,
+    STUDENT_TABLE: studentTable.tableName,
+    SEND_SMS_FUNCTION_NAME: sendSmsFn.functionName,
+  },
+});
 
+attendanceTable.grantReadData(checkThresholdFn);
+checkThresholdFn.addToRolePolicy(new iam.PolicyStatement({
+  actions: ['dynamodb:Query'],
+  resources: [`${attendanceTable.tableArn}/index/*`],
+}));
+
+studentTable.grantReadData(checkThresholdFn);
+
+notificationTable.grantReadData(checkThresholdFn);
+checkThresholdFn.addToRolePolicy(new iam.PolicyStatement({
+  actions: ['dynamodb:Query'],
+  resources: [`${notificationTable.tableArn}/index/*`],
+}));
+
+sendSmsFn.grantInvoke(checkThresholdFn);
+
+// New EventBridge rule: only ABSENT AttendanceRecorded events, routed to
+// checkThresholdFn. Separate from AttendanceAuditRule (which logs every
+// outcome) -- this one only cares about absences worth evaluating.
+new events.Rule(this, 'ThresholdCheckRule', {
+  eventBus: defaultBus,
+  eventPattern: {
+    source: ['csg.attendance'],
+    detailType: ['AttendanceRecorded'],
+    detail: {
+      status: ['ABSENT'],
+    },
+  },
+  targets: [new targets.LambdaFunction(checkThresholdFn)],
+});
 
     attendanceTable.grantReadData(attendanceSummaryFn);
     studentTable.grantReadData(attendanceSummaryFn);

@@ -32,7 +32,7 @@ export class AuthStack extends cdk.Stack {
         phoneNumber: { required: false, mutable: true },
       },
       customAttributes: {
-      school_id: new cognito.StringAttribute({ mutable: true }),
+      school_id: new cognito.StringAttribute({ mutable: false }),
       },
       passwordPolicy: {
         minLength: 10,
