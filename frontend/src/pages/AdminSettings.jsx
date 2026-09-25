@@ -3,10 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
 import { signOut } from 'aws-amplify/auth'
 import { getChronicThreshold, setChronicThreshold } from '../lib/settings'
+import { getCurrentUserContext, getClassIdForSchool } from '../lib/auth'
 
 const client = generateClient()
-
-const CLASS_ID = 'class-form2east'
 
 const listStudentsQuery = /* GraphQL */ `
   query ListStudentsWithPhone($classId: ID) {
@@ -37,7 +36,8 @@ export default function AdminSettings() {
   const [thresholdPercent, setThresholdPercent] = useState(Math.round(getChronicThreshold() * 100))
   const [thresholdSaved, setThresholdSaved] = useState(false)
 
-  // Guardian phone section
+// Guardian phone section
+  const [classId, setClassId] = useState(null)
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -45,11 +45,12 @@ export default function AdminSettings() {
   const [savingId, setSavingId] = useState(null)
   const [saveError, setSaveError] = useState('')
 
-  const loadStudents = useCallback(async () => {
+  const loadStudents = useCallback(async (resolvedClassId) => {
+    if (!resolvedClassId) return
     setLoading(true)
     setError('')
     try {
-      const res = await client.graphql({ query: listStudentsQuery, variables: { classId: CLASS_ID } })
+      const res = await client.graphql({ query: listStudentsQuery, variables: { classId: resolvedClassId } })
       setStudents(res.data.listStudents.items)
     } catch (err) {
       console.error('Failed to load students:', err)
@@ -61,7 +62,19 @@ export default function AdminSettings() {
   }, [])
 
   useEffect(() => {
-    loadStudents()
+    async function resolveAndLoad() {
+      try {
+        const { schoolId } = await getCurrentUserContext()
+        const cid = await getClassIdForSchool(schoolId)
+        setClassId(cid)
+        await loadStudents(cid)
+      } catch (err) {
+        console.error('Failed to resolve school/class context:', err)
+        setError(err.message)
+        setLoading(false)
+      }
+    }
+    resolveAndLoad()
   }, [loadStudents])
 
   function handleSaveThreshold(e) {
@@ -86,7 +99,7 @@ export default function AdminSettings() {
           },
         },
       })
-      await loadStudents()
+      await loadStudents(classId)
       setEditedPhones((prev) => {
         const next = { ...prev }
         delete next[studentId]

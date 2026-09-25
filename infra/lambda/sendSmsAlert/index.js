@@ -20,7 +20,8 @@ async function getCredentials() {
 }
 
 exports.handler = async (event) => {
-  const { school_id, student_id, guardian_phone, message } = event.arguments.input;
+  const input = event.arguments?.input ?? event;
+  const { school_id, student_id, guardian_phone, message } = input;
 
   const { apiKey, username } = await getCredentials();
   const at = require('africastalking')({ apiKey, username });

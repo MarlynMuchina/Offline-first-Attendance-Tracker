@@ -90,7 +90,7 @@ export default function Teacher() {
       window.addEventListener('offline', handleOffline)
 
       const interval = setInterval(() => {
-        syncPendingAttendance().then(() => loadQueue(classId))
+        syncPendingAttendance().then(() => loadQueue(classIdRef.current))
         getQueueHealth().then((health) => {
           setStorageWarning(health.criticalUnsynced ? health : null)
         })
