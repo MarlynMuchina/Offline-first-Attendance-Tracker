@@ -109,9 +109,43 @@ type AttendanceSummaryResult {
   generated_at: AWSDateTime!
 }
 
+input PredictClassRiskInput {
+  class_id: ID!
+}
+
+input PredictAttendanceRiskInput {
+  student_id: ID!
+}
+
+type AttendanceRiskFeatures {
+  overall_rate: Float!
+  recent7_rate: Float!
+  recent14_rate: Float!
+  trend_recent14_minus_overall: Float!
+  max_absence_streak: Int!
+  active_absence_streak_at_cutoff: Int!
+}
+
+type AttendanceRiskResult {
+  student_id: ID!
+  risk_score: Float
+  risk_level: String!
+  reason: String!
+  features: AttendanceRiskFeatures
+  model_trained_at: AWSDateTime!
+}
+
 type Query {
   generateAttendanceSummary(input: GenerateAttendanceSummaryInput!): AttendanceSummaryResult
     @function(name: "attendanceSummaryFunction")
+    @auth(rules: [{ allow: groups, groups: ["Admin", "HeadTeacher", "Teacher"] }])
+
+  predictAttendanceRisk(input: PredictAttendanceRiskInput!): AttendanceRiskResult
+    @function(name: "predictAttendanceRiskFunction")
+    @auth(rules: [{ allow: groups, groups: ["Admin", "HeadTeacher", "Teacher"] }])
+
+  predictAttendanceRiskForClass(input: PredictClassRiskInput!): [AttendanceRiskResult!]!
+    @function(name: "predictAttendanceRiskFunction")
     @auth(rules: [{ allow: groups, groups: ["Admin", "HeadTeacher", "Teacher"] }])
 }
 
