@@ -28,3 +28,5 @@ infra/secret-content.json
 
 sms-response.json
 test-sms-payload.json
+
+attendance_raw_scan.json
