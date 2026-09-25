@@ -109,9 +109,7 @@ type AttendanceSummaryResult {
   generated_at: AWSDateTime!
 }
 
-input PredictClassRiskInput {
-  class_id: ID!
-}
+
 
 input PredictAttendanceRiskInput {
   student_id: ID!
@@ -141,10 +139,6 @@ type Query {
     @auth(rules: [{ allow: groups, groups: ["Admin", "HeadTeacher", "Teacher"] }])
 
   predictAttendanceRisk(input: PredictAttendanceRiskInput!): AttendanceRiskResult
-    @function(name: "predictAttendanceRiskFunction")
-    @auth(rules: [{ allow: groups, groups: ["Admin", "HeadTeacher", "Teacher"] }])
-
-  predictAttendanceRiskForClass(input: PredictClassRiskInput!): [AttendanceRiskResult!]!
     @function(name: "predictAttendanceRiskFunction")
     @auth(rules: [{ allow: groups, groups: ["Admin", "HeadTeacher", "Teacher"] }])
 }
