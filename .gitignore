@@ -30,3 +30,13 @@ sms-response.json
 test-sms-payload.json
 
 attendance_raw_scan.json
+
+at-test/
+
+payload.json
+response.json
+sms-test-payload.json
+query-*.json
+stray-dates-values.json
+delete-key-*.json
+at-secret-update.json
