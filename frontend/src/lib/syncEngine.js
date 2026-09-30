@@ -1,3 +1,4 @@
+
 import { generateClient } from 'aws-amplify/api'
 import { getCurrentUser } from 'aws-amplify/auth'
 import { db } from './db'
