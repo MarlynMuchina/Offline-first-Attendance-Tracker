@@ -29,6 +29,49 @@ const updateStudentMutation = /* GraphQL */ `
   }
 `
 
+const listNotificationLogsQuery = /* GraphQL */ `
+  query ListRecentNotificationLogs($schoolId: ID, $cutoff: String, $nextToken: String) {
+    listNotificationLogs(
+      filter: { school_id: { eq: $schoolId }, created_at: { ge: $cutoff } }
+      limit: 100
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        student_id
+        guardian_phone
+        message
+        channel
+        status
+        sent_at
+        created_at
+      }
+      nextToken
+    }
+  }
+`
+
+// Amplify list queries truncate at their limit BEFORE applying filters (the
+// same gotcha documented for listClasses in auth.js), so a 30-day window
+// with many students could theoretically need more than one page even
+// within that window. Walks pages the same way Admin.jsx's fetchAllPages
+// does, kept local here since this is the only place in this file that
+// needs it.
+async function fetchAllNotificationPages(schoolId, cutoffIso) {
+  let items = []
+  let nextToken = null
+  do {
+    const res = await client.graphql({
+      query: listNotificationLogsQuery,
+      variables: { schoolId, cutoff: cutoffIso, nextToken },
+    })
+    const page = res.data.listNotificationLogs
+    items = items.concat(page.items)
+    nextToken = page.nextToken
+  } while (nextToken)
+  return items
+}
+
 export default function AdminSettings() {
   const navigate = useNavigate()
 
@@ -44,6 +87,42 @@ export default function AdminSettings() {
   const [editedPhones, setEditedPhones] = useState({}) // { studentId: newValue }
   const [savingId, setSavingId] = useState(null)
   const [saveError, setSaveError] = useState('')
+
+  // SMS audit log section
+  const [notifLogs, setNotifLogs] = useState([])
+  const [notifLoading, setNotifLoading] = useState(true)
+  const [notifError, setNotifError] = useState('')
+  const [studentNames, setStudentNames] = useState({}) // { studentId: "First Last" }, for display
+
+  const loadNotificationLogs = useCallback(async (resolvedClassId, schoolId) => {
+    if (!resolvedClassId || !schoolId) return
+    setNotifLoading(true)
+    setNotifError('')
+    try {
+      const cutoff = new Date()
+      cutoff.setDate(cutoff.getDate() - 30)
+
+      const [logs, roster] = await Promise.all([
+        fetchAllNotificationPages(schoolId, cutoff.toISOString()),
+        client.graphql({ query: listStudentsQuery, variables: { classId: resolvedClassId } }),
+      ])
+
+      logs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      setNotifLogs(logs)
+
+      const nameMap = {}
+      for (const s of roster.data.listStudents.items) {
+        nameMap[s.id] = `${s.first_name} ${s.last_name}`
+      }
+      setStudentNames(nameMap)
+    } catch (err) {
+      console.error('Failed to load notification logs:', err)
+      const detail = err.errors?.map((e) => e.message).join('; ') || err.message
+      setNotifError(detail)
+    } finally {
+      setNotifLoading(false)
+    }
+  }, [])
 
   const loadStudents = useCallback(async (resolvedClassId) => {
     if (!resolvedClassId) return
@@ -67,15 +146,19 @@ export default function AdminSettings() {
         const { schoolId } = await getCurrentUserContext()
         const cid = await getClassIdForSchool(schoolId)
         setClassId(cid)
-        await loadStudents(cid)
+        await Promise.all([
+          loadStudents(cid),
+          loadNotificationLogs(cid, schoolId),
+        ])
       } catch (err) {
         console.error('Failed to resolve school/class context:', err)
         setError(err.message)
         setLoading(false)
+        setNotifLoading(false)
       }
     }
     resolveAndLoad()
-  }, [loadStudents])
+  }, [loadStudents, loadNotificationLogs])
 
   function handleSaveThreshold(e) {
     e.preventDefault()
@@ -197,6 +280,54 @@ export default function AdminSettings() {
                   </tr>
                 )
               })}
+            </tbody>
+          
+          </table>
+        )}
+      </div>
+
+      <div style={{ border: '1px solid #ddd', borderRadius: 6, padding: 16, marginTop: 16 }}>
+        <h4>SMS Alert Log — Last 30 Days</h4>
+        {notifLoading && <p style={{ fontSize: 13, color: '#888' }}>Loading…</p>}
+        {notifError && <p style={{ color: 'red', fontSize: 13 }}>{notifError}</p>}
+        {!notifLoading && !notifError && (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
+                <th>Sent</th>
+                <th>Student</th>
+                <th>Phone</th>
+                <th>Status</th>
+                <th>Message</th>
+              </tr>
+            </thead>
+            <tbody>
+              {notifLogs.map((log) => (
+                <tr key={log.id} style={{ borderBottom: '1px solid #eee' }}>
+                  <td style={{ padding: '6px 0', fontSize: 12 }}>
+                    {new Date(log.created_at).toLocaleString()}
+                  </td>
+                  <td style={{ fontSize: 12 }}>{studentNames[log.student_id] || log.student_id}</td>
+                  <td style={{ fontSize: 12 }}>{log.guardian_phone}</td>
+                  <td>
+                    <span style={{
+                      fontSize: 11, padding: '2px 8px', borderRadius: 10,
+                      color: log.status === 'SENT' ? '#080' : '#c00',
+                      border: '1px solid currentColor',
+                    }}>
+                      {log.status}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: 12, maxWidth: 300 }}>{log.message}</td>
+                </tr>
+              ))}
+              {notifLogs.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="subtext" style={{ padding: '12px 6px', fontSize: 13, color: '#888' }}>
+                    No SMS alerts sent in the last 30 days.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         )}
