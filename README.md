@@ -1,4 +1,4 @@
-# CSG Offline-First Attendance Tracker
+
 # CSG Offline-First Student Attendance Tracker
 
 A serverless, offline-first attendance tracking system built for rural schools with unreliable internet connectivity. Teachers record attendance locally on any device — data syncs automatically to the cloud once a connection is available.
