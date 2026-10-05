@@ -23,13 +23,34 @@ import { generateClient } from 'aws-amplify/api'
 
 const client = generateClient()
 
+/**
+ * Runs a filtered list query and follows nextToken until it finds a match or
+ * runs out of pages. AppSync applies `limit` to the DynamoDB scan BEFORE the
+ * filter, so a single page can come back with empty items even though a
+ * matching record exists further on (with a non-null nextToken).
+ * Pass stopAtFirst to return as soon as any page yields an item.
+ */
+async function listAll(query, variables, listField, { stopAtFirst = false } = {}) {
+  const items = []
+  let nextToken = null
+  do {
+    const res = await client.graphql({ query, variables: { ...variables, nextToken } })
+    const page = res.data[listField]
+    items.push(...page.items.filter(Boolean))
+    if (stopAtFirst && items.length) break
+    nextToken = page.nextToken
+  } while (nextToken)
+  return items
+}
+
 const listClassesBySchool = /* GraphQL */ `
-  query ListClassesBySchool($schoolId: ID!) {
-    listClasses(filter: { school_id: { eq: $schoolId } }, limit: 100) {
+  query ListClassesBySchool($schoolId: ID!, $nextToken: String) {
+    listClasses(filter: { school_id: { eq: $schoolId } }, limit: 100, nextToken: $nextToken) {
       items {
         id
         name
       }
+      nextToken
     }
   }
 `
@@ -42,36 +63,34 @@ const listClassesBySchool = /* GraphQL */ `
  * See getClassesForCurrentTeacher below for the real per-teacher lookup.
  */
 export async function getClassIdForSchool(schoolId) {
-  const res = await client.graphql({
-    query: listClassesBySchool,
-    variables: { schoolId },
-  })
-  const items = res.data.listClasses.items
+  const items = await listAll(listClassesBySchool, { schoolId }, 'listClasses', { stopAtFirst: true })
   if (!items.length) throw new Error(`No class found for school ${schoolId}`)
   return items[0].id
 }
 
 const getTeacherByCognitoSub = /* GraphQL */ `
-  query GetTeacherByCognitoSub($sub: String!) {
-    listTeachers(filter: { cognito_sub: { eq: $sub } }, limit: 1) {
+  query GetTeacherByCognitoSub($sub: String!, $nextToken: String) {
+    listTeachers(filter: { cognito_sub: { eq: $sub } }, limit: 100, nextToken: $nextToken) {
       items {
         id
         first_name
         last_name
       }
+      nextToken
     }
   }
 `
 
 const listClassesByTeacher = /* GraphQL */ `
-  query ListClassesByTeacher($teacherId: ID!) {
-    listClasses(filter: { teacher_id: { eq: $teacherId } }, limit: 100) {
+  query ListClassesByTeacher($teacherId: ID!, $nextToken: String) {
+    listClasses(filter: { teacher_id: { eq: $teacherId } }, limit: 100, nextToken: $nextToken) {
       items {
         id
         name
         grade
         stream
       }
+      nextToken
     }
   }
 `
@@ -87,20 +106,14 @@ const listClassesByTeacher = /* GraphQL */ `
  * Throws if no Teacher record is linked to this login at all.
  */
 export async function getClassesForCurrentTeacher(cognitoSub) {
-  const teacherRes = await client.graphql({
-    query: getTeacherByCognitoSub,
-    variables: { sub: cognitoSub },
-  })
-  const teacherRecord = teacherRes.data.listTeachers.items[0]
+  const [teacherRecord] = await listAll(
+    getTeacherByCognitoSub, { sub: cognitoSub }, 'listTeachers', { stopAtFirst: true }
+  )
   if (!teacherRecord) {
     throw new Error('No teacher record is linked to this account yet. Ask an admin to link it.')
   }
 
-  const classesRes = await client.graphql({
-    query: listClassesByTeacher,
-    variables: { teacherId: teacherRecord.id },
-  })
-  const classes = classesRes.data.listClasses.items
+  const classes = await listAll(listClassesByTeacher, { teacherId: teacherRecord.id }, 'listClasses')
   if (!classes.length) {
     throw new Error('No classes are assigned to you yet.')
   }

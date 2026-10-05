@@ -107,11 +107,12 @@ const updateClassMutation = /* GraphQL */ `
 `
 
 const countStudentsInClassQuery = /* GraphQL */ `
-  query CountStudentsInClass($classId: ID) {
-    listStudents(filter: { class_id: { eq: $classId } }, limit: 1) {
+  query CountStudentsInClass($classId: ID, $nextToken: String) {
+    listStudents(filter: { class_id: { eq: $classId } }, limit: 100, nextToken: $nextToken) {
       items {
         id
       }
+      nextToken
     }
   }
 `
@@ -439,11 +440,19 @@ export default function ClassManagement() {
   async function handleDeleteClass(classId, className) {
     setClassActionError('')
     try {
-      const countRes = await client.graphql({
-        query: countStudentsInClassQuery,
-        variables: { classId },
-      })
-      if (countRes.data.listStudents.items.length > 0) {
+      // limit is applied before the filter, so an empty page doesn't mean an
+      // empty class -- keep paging until we find a student or run out.
+      let hasStudents = false
+      let nextToken = null
+      do {
+        const countRes = await client.graphql({
+          query: countStudentsInClassQuery,
+          variables: { classId, nextToken },
+        })
+        hasStudents = countRes.data.listStudents.items.length > 0
+        nextToken = countRes.data.listStudents.nextToken
+      } while (!hasStudents && nextToken)
+      if (hasStudents) {
         setClassActionError(
           `Can't delete "${className}" — it still has students in it. Move them to another class first.`
         )
