@@ -8,17 +8,30 @@ import { getCurrentUserContext, getClassIdForSchool } from '../lib/auth'
 const client = generateClient()
 
 const listStudentsQuery = /* GraphQL */ `
-  query ListStudentsWithPhone($classId: ID) {
-    listStudents(filter: { class_id: { eq: $classId } }, limit: 100) {
+  query ListStudentsWithPhone($classId: ID, $nextToken: String) {
+    listStudents(filter: { class_id: { eq: $classId } }, limit: 100, nextToken: $nextToken) {
       items {
         id
         first_name
         last_name
         guardian_phone
       }
+      nextToken
     }
   }
 `
+
+// limit is applied before the filter, so follow nextToken to get the full roster
+async function fetchClassRoster(classId) {
+  const students = []
+  let nextToken = null
+  do {
+    const res = await client.graphql({ query: listStudentsQuery, variables: { classId, nextToken } })
+    students.push(...res.data.listStudents.items)
+    nextToken = res.data.listStudents.nextToken
+  } while (nextToken)
+  return students
+}
 
 const updateStudentMutation = /* GraphQL */ `
   mutation UpdateStudentPhone($input: UpdateStudentInput!) {
@@ -104,14 +117,14 @@ export default function AdminSettings() {
 
       const [logs, roster] = await Promise.all([
         fetchAllNotificationPages(schoolId, cutoff.toISOString()),
-        client.graphql({ query: listStudentsQuery, variables: { classId: resolvedClassId } }),
+        fetchClassRoster(resolvedClassId),
       ])
 
       logs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       setNotifLogs(logs)
 
       const nameMap = {}
-      for (const s of roster.data.listStudents.items) {
+      for (const s of roster) {
         nameMap[s.id] = `${s.first_name} ${s.last_name}`
       }
       setStudentNames(nameMap)
@@ -129,8 +142,7 @@ export default function AdminSettings() {
     setLoading(true)
     setError('')
     try {
-      const res = await client.graphql({ query: listStudentsQuery, variables: { classId: resolvedClassId } })
-      setStudents(res.data.listStudents.items)
+      setStudents(await fetchClassRoster(resolvedClassId))
     } catch (err) {
       console.error('Failed to load students:', err)
       const detail = err.errors?.map((e) => e.message).join('; ') || err.message
