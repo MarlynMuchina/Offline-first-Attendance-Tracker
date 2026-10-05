@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { signIn, confirmSignIn } from 'aws-amplify/auth'
+import { signIn, confirmSignIn, signOut } from 'aws-amplify/auth'
 
 export default function Login() {
   const [phone, setPhone] = useState('')
@@ -29,6 +29,15 @@ export default function Login() {
       setError(`Additional step required: ${nextStep?.signInStep || 'unknown'}`)
     } catch (err) {
       console.error('Sign in failed:', err)
+      // A stale cached session blocks a fresh sign-in with a fairly cryptic
+      // error -- common on a shared device, or when switching test
+      // accounts. Clear it automatically and ask the user to retry, rather
+      // than leaving them stuck on an unexplained error with no way out.
+      if (err.name === 'UserAlreadyAuthenticatedException') {
+        await signOut()
+        setError('You were already signed in as someone else. Please try logging in again.')
+        return
+      }
       setError(err.message || 'Login failed')
     }
   }

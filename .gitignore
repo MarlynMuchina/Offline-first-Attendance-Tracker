@@ -40,3 +40,8 @@ query-*.json
 stray-dates-values.json
 delete-key-*.json
 at-secret-update.json
+
+*-key.json
+*-value.json
+test-*-payload.json
+test-*-response.json

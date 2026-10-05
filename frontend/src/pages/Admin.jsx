@@ -77,6 +77,32 @@ const predictClassRiskQuery = /* GraphQL */ `
 `
 
 
+const getAdminSessionQuery = /* GraphQL */ `
+  query GetAdminSession($id: ID!) {
+    getAdminSessionTracker(id: $id) {
+      id
+      admin_phone
+      signed_in_at
+    }
+  }
+`
+
+const createAdminSessionMutation = /* GraphQL */ `
+  mutation CreateAdminSession($input: CreateAdminSessionTrackerInput!) {
+    createAdminSessionTracker(input: $input) {
+      id
+    }
+  }
+`
+
+const updateAdminSessionMutation = /* GraphQL */ `
+  mutation UpdateAdminSession($input: UpdateAdminSessionTrackerInput!) {
+    updateAdminSessionTracker(input: $input) {
+      id
+    }
+  }
+`
+
 const createStudentMutation = /* GraphQL */ `
   mutation CreateStudent($input: CreateStudentInput!) {
     createStudent(input: $input) {
@@ -158,6 +184,7 @@ export default function Admin() {
 const [classId, setClassId] = useState(null)
 const [contextError, setContextError] = useState('')
   const [{ startDate, endDate }] = useState(defaultDateRange)
+  const [adminWarning, setAdminWarning] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [stats, setStats] = useState(null)
@@ -202,10 +229,11 @@ const loadData = useCallback(async () => {
 useEffect(() => {
   async function resolveContext() {
     try {
-      const { schoolId: sid } = await getCurrentUserContext()
+      const { schoolId: sid, phoneNumber } = await getCurrentUserContext()
       const cid = await getClassIdForSchool(sid)
       setSchoolId(sid)
       setClassId(cid)
+      checkAndClaimAdminSession(sid, phoneNumber)
     } catch (err) {
       setContextError(err.message)
       setLoading(false)
@@ -213,6 +241,42 @@ useEffect(() => {
   }
   resolveContext()
 }, [])
+
+  // "Warn, don't block" concurrent-admin check: looks up who last signed
+  // in as admin for this school, warns if it's someone else, then claims
+  // the slot for the current session. Deliberately fire-and-forget (not
+  // awaited by resolveContext) -- this is a courtesy notice, not a
+  // security gate, so it should never delay or block the real dashboard
+  // from loading even if this check is slow or fails.
+  async function checkAndClaimAdminSession(schoolId, phoneNumber) {
+    try {
+      const res = await client.graphql({ query: getAdminSessionQuery, variables: { id: schoolId } })
+      const existing = res.data.getAdminSessionTracker
+
+      if (existing && existing.admin_phone !== phoneNumber) {
+        setAdminWarning(
+          `${existing.admin_phone} was also signed in as admin for this school, as of ${new Date(existing.signed_in_at).toLocaleString()}.`
+        )
+      }
+
+      const now = new Date().toISOString()
+      if (existing) {
+        await client.graphql({
+          query: updateAdminSessionMutation,
+          variables: { input: { id: schoolId, admin_phone: phoneNumber, signed_in_at: now } },
+        })
+      } else {
+        await client.graphql({
+          query: createAdminSessionMutation,
+          variables: { input: { id: schoolId, admin_phone: phoneNumber, signed_in_at: now } },
+        })
+      }
+    } catch (err) {
+      // Never let this block or error out the real dashboard -- it's a
+      // courtesy notice, not core functionality.
+      console.warn('Admin session check failed (non-blocking):', err)
+    }
+  }
 
   useEffect(() => {
     loadData()
@@ -416,10 +480,21 @@ useEffect(() => {
         <h2>Administrator Dashboard</h2>
         <div className="button-group">
           <button onClick={handleExportPDF} className="btn btn-small">Export PDF</button>
+          <button onClick={() => navigate('/admin/classes')} className="btn btn-small">Classes</button>
           <button onClick={() => navigate('/admin/settings')} className="btn btn-small">Settings</button>
           {signOutButton}
         </div>
       </div>
+      {adminWarning && (
+        <div style={{
+          marginBottom: 16, padding: '10px 14px', border: '1px solid #c80',
+          borderRadius: 6, background: '#fff8ec', fontSize: 13, color: '#8a5a00',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <span>⚠ {adminWarning}</span>
+          <button onClick={() => setAdminWarning('')} style={{ fontSize: 12, padding: '2px 8px' }}>Dismiss</button>
+        </div>
+      )}
       <p className="subtext">Showing data from {startDate} to {endDate}</p>
 
       <div className="card-row">
