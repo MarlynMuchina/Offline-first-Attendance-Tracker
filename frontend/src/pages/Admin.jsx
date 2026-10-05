@@ -103,16 +103,6 @@ const updateAdminSessionMutation = /* GraphQL */ `
   }
 `
 
-const createStudentMutation = /* GraphQL */ `
-  mutation CreateStudent($input: CreateStudentInput!) {
-    createStudent(input: $input) {
-      id
-      first_name
-      last_name
-    }
-  }
-`
-
 // Walks through every page of a paginated Amplify list query, using
 // nextToken, until the full result set has been collected. Without this,
 // any query result over its per-page limit (1000 for attendance, 100 for
@@ -196,12 +186,6 @@ const [contextError, setContextError] = useState('')
   const [riskResults, setRiskResults] = useState({}) // { studentId: { risk_level, risk_score, reason } }
   const [riskLoading, setRiskLoading] = useState(false)
   const [riskError, setRiskError] = useState('')
-
-  const [newFirstName, setNewFirstName] = useState('')
-  const [newLastName, setNewLastName] = useState('')
-  const [newGuardianPhone, setNewGuardianPhone] = useState('')
-  const [addingStudent, setAddingStudent] = useState(false)
-  const [addStudentError, setAddStudentError] = useState('')
 
 const loadData = useCallback(async () => {
   if (!classId) return   // ← add this guard
@@ -331,40 +315,6 @@ useEffect(() => {
   }
 
 
-
-  async function handleAddStudent(e) {
-    e.preventDefault()
-    setAddingStudent(true)
-    setAddStudentError('')
-    try {
-      const now = new Date().toISOString()
-      await client.graphql({
-        query: createStudentMutation,
-        variables: {
-          input: {
-            school_id: schoolId,
-            class_id: classId,
-            first_name: newFirstName,
-            last_name: newLastName,
-            guardian_phone: newGuardianPhone || null,
-            status: 'ACTIVE',
-            created_at: now,
-            updated_at: now,
-          },
-        },
-      })
-      setNewFirstName('')
-      setNewLastName('')
-      setNewGuardianPhone('')
-      await loadData()
-    } catch (err) {
-      console.error('Add student failed:', err)
-      const detail = err.errors?.map((e) => e.message).join('; ') || err.message
-      setAddStudentError(detail)
-    } finally {
-      setAddingStudent(false)
-    }
-  }
 
   function handleExportPDF() {
     if (!stats) return
@@ -599,33 +549,6 @@ useEffect(() => {
             </tbody>
           </table>
         )}
-      </div>
-
-      <div className="section-divider">
-        <h4>Add Student to {schoolId}</h4>
-        <form onSubmit={handleAddStudent} className="form-row">
-          <div>
-            <label className="field-label">First name</label>
-            <input value={newFirstName} onChange={(e) => setNewFirstName(e.target.value)} required className="input" />
-          </div>
-          <div>
-            <label className="field-label">Last name</label>
-            <input value={newLastName} onChange={(e) => setNewLastName(e.target.value)} required className="input" />
-          </div>
-          <div>
-            <label className="field-label">Guardian phone (optional)</label>
-            <input
-              value={newGuardianPhone}
-              onChange={(e) => setNewGuardianPhone(e.target.value)}
-              placeholder="+2547XXXXXXXX"
-              className="input"
-            />
-          </div>
-          <button type="submit" disabled={addingStudent} className="btn btn-primary">
-            {addingStudent ? 'Adding…' : 'Add Student'}
-          </button>
-        </form>
-        {addStudentError && <p className="text-error" style={{ marginTop: 8 }}>{addStudentError}</p>}
       </div>
     </div>
   )
