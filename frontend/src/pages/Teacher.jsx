@@ -5,7 +5,7 @@ import { getCurrentUser, signOut } from 'aws-amplify/auth'
 import { db } from '../lib/db'
 import { startSyncEngine, syncPendingAttendance, stopSyncEngine } from '../lib/syncEngine'
 import { getQueueHealth } from '../lib/storageQuotaManager'
-import { getCurrentUserContext, getClassIdForSchool } from '../lib/auth'
+import { getCurrentUserContext, getClassesForCurrentTeacher } from '../lib/auth'
 
 const client = generateClient()
 
@@ -19,6 +19,29 @@ const listStudentsQuery = /* GraphQL */ `
         class_id
       }
     }
+  }
+`
+
+const listSchoolStudentsQuery = /* GraphQL */ `
+  query ListAllSchoolStudents($schoolId: ID, $nextToken: String) {
+    listStudents(filter: { school_id: { eq: $schoolId } }, limit: 100, nextToken: $nextToken) {
+      items {
+        id
+        first_name
+        last_name
+        class_id
+      }
+      nextToken
+    }
+  }
+`
+
+const updateStudentClassMutation = /* GraphQL */ `
+  mutation AssignStudentToClass($input: UpdateStudentInput!) {
+    updateStudent(input: $input) {
+      id
+      class_id
+     }
   }
 `
 
@@ -36,6 +59,14 @@ export default function Teacher() {
   const [storageWarning, setStorageWarning] = useState(null)
   const [contextError, setContextError] = useState('')
   const classIdRef = useRef(null)
+
+  const [teacherName, setTeacherName] = useState('')
+  const [myClasses, setMyClasses] = useState([])
+  const [availableStudents, setAvailableStudents] = useState([])
+
+  const [availableLoading, setAvailableLoading] = useState(false)
+  const [availableError, setAvailableError] = useState('')
+  const [addingStudentId, setAddingStudentId] = useState(null)
 
   const loadStudents = useCallback(async (resolvedClassId) => {
     try {
@@ -62,17 +93,45 @@ export default function Teacher() {
     setQueueRecords(records)
   }, [])
 
+  const loadAvailableStudents = useCallback(async (resolvedSchoolId, resolvedClassId) => {
+    setAvailableLoading(true)
+    setAvailableError('')
+    try {
+      let items = []
+      let nextToken = null
+      do {
+        const res = await client.graphql({
+          query: listSchoolStudentsQuery,
+          variables: { schoolId: resolvedSchoolId, nextToken },
+        })
+        items = items.concat(res.data.listStudents.items)
+        nextToken = res.data.listStudents.nextToken
+      } while (nextToken)
+
+      setAvailableStudents(items.filter((s) => s.class_id !== resolvedClassId))
+    } catch (err) {
+      console.error('Failed to load available students:', err)
+      setAvailableError(err.message || 'Failed to load students')
+    } finally {
+      setAvailableLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     async function init() {
       setLoading(true)
       try {
-        const { schoolId: sid } = await getCurrentUserContext()
+        const { schoolId: sid, userId } = await getCurrentUserContext()
         setSchoolId(sid)
-        const resolvedClassId = await getClassIdForSchool(sid)
+        const { teacherName: name, classes } = await getClassesForCurrentTeacher(userId)
+        setTeacherName(name)
+        setMyClasses(classes)
+        const resolvedClassId = classes[0].id
         setClassId(resolvedClassId)
         classIdRef.current = resolvedClassId
         await loadStudents(resolvedClassId)
         await loadQueue(resolvedClassId)
+        await loadAvailableStudents(sid, resolvedClassId)
       } catch (err) {
         console.error('Failed to resolve school/class context:', err)
         setContextError(err.message)
@@ -83,6 +142,7 @@ export default function Teacher() {
 
       function handleOnline() {
         setIsOnline(true)
+        if (!classIdRef.current) return
         syncPendingAttendance().then(() => loadQueue(classIdRef.current))
       }
       function handleOffline() { setIsOnline(false) }
@@ -90,6 +150,7 @@ export default function Teacher() {
       window.addEventListener('offline', handleOffline)
 
       const interval = setInterval(() => {
+        if (!classIdRef.current) return
         syncPendingAttendance().then(() => loadQueue(classIdRef.current))
         getQueueHealth().then((health) => {
           setStorageWarning(health.criticalUnsynced ? health : null)
@@ -160,24 +221,64 @@ export default function Teacher() {
   setSyncing(false)
 }
 
+  async function handleAddExistingStudent(studentId) {
+    setAddingStudentId(studentId)
+    try {
+      await client.graphql({
+        query: updateStudentClassMutation,
+        variables: {
+          input: {
+            id: studentId,
+            class_id: classIdRef.current,
+            updated_at: new Date().toISOString(),
+          },
+        },
+      })
+      await loadStudents(classIdRef.current)
+      await loadAvailableStudents(schoolId, classIdRef.current)
+    } catch (err) {
+      console.error('Failed to add student to class:', err)
+      setAvailableError(err.message || 'Failed to add student')
+    } finally {
+      setAddingStudentId(null)
+    }
+  }
+
   if (loading) {
     return <div style={{ textAlign: 'center', marginTop: 80 }}>Loading roster…</div>
   }
 
-  if (students.length === 0) {
+  if (contextError) {
     return (
       <div style={{ textAlign: 'center', marginTop: 80 }}>
-        No students found. Connect to the internet at least once to load the roster.
+        <h3>Couldn't load your class</h3>
+        <p style={{ color: 'red' }}>{contextError}</p>
+        <button
+          onClick={async () => {
+            await signOut()
+            navigate('/login')
+          }}
+          style={{ padding: '8px 16px', marginTop: 12 }}
+        >
+          Sign Out
+        </button>
       </div>
     )
   }
+
+
 
   const syncedCount = queueRecords.filter((r) => r.sync_status === 'SYNCED').length
 
   return (
     <div style={{ maxWidth: 700, margin: '40px auto', fontFamily: 'sans-serif' }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-  <h2>Teacher Dashboard — {schoolId}</h2>
+  <div>
+    <h2 style={{ marginBottom: 2 }}>Welcome, {teacherName}</h2>
+    <p style={{ fontSize: 13, color: '#888', margin: 0 }}>
+      {myClasses.find((c) => c.id === classId)?.name || ''} — {schoolId}
+    </p>
+  </div>
   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
     <span
       style={{
@@ -201,6 +302,27 @@ export default function Teacher() {
    </button>
   </div>
 </div>
+      {myClasses.length > 1 && (
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 13, marginRight: 8 }}>Viewing class:</label>
+          <select
+            value={classId}
+            onChange={async (e) => {
+              const newClassId = e.target.value
+              setClassId(newClassId)
+              classIdRef.current = newClassId
+              await loadStudents(newClassId)
+              await loadQueue(newClassId)
+              await loadAvailableStudents(schoolId, newClassId)
+            }}
+            style={{ padding: 6 }}
+          >
+            {myClasses.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
       {storageWarning && (
         <div style={{
           marginBottom: 16, padding: '10px 14px', border: '1px solid #c80',
@@ -235,7 +357,15 @@ export default function Teacher() {
           </tr>
         </thead>
         <tbody>
+          {students.length === 0 && (
+            <tr>
+              <td colSpan={5} style={{ padding: '12px 0', color: '#999', fontSize: 13 }}>
+                No students in this class yet — add some below.
+              </td>
+            </tr>
+          )}
           {students.map((s) => {
+            
             const record = queueRecords.find((r) => r.student_id === s.id)
             return (
               <tr key={s.id} style={{ borderBottom: '1px solid #eee' }}>
@@ -262,6 +392,27 @@ export default function Teacher() {
           })}
         </tbody>
       </table>
+
+      <div style={{ marginTop: 24, borderTop: '1px solid #ddd', paddingTop: 16 }}>
+        <h3 style={{ fontSize: 16 }}>Add Existing Students to My Class</h3>
+        {availableLoading && <p style={{ fontSize: 13, color: '#999' }}>Loading…</p>}
+        {availableError && <p style={{ color: 'red', fontSize: 13 }}>{availableError}</p>}
+        {!availableLoading && availableStudents.length === 0 && (
+          <p style={{ fontSize: 13, color: '#999' }}>No other students in this school to add.</p>
+        )}
+        {availableStudents.map((s) => (
+          <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
+            <span>{s.first_name} {s.last_name}</span>
+            <button
+              onClick={() => handleAddExistingStudent(s.id)}
+              disabled={addingStudentId === s.id}
+              style={{ fontSize: 12, padding: '4px 10px' }}
+            >
+              {addingStudentId === s.id ? 'Adding…' : 'Add to my class'}
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

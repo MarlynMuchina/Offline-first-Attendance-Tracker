@@ -10,7 +10,16 @@ export default function ProtectedRoute({ children, allowedGroups }) {
   useEffect(() => {
     async function check() {
       try {
-        const session = await fetchAuthSession({ forceRefresh: true })
+        // forceRefresh makes a live network call to Cognito -- only do this
+        // when online. Offline, fall back to a plain fetchAuthSession(),
+        // which Amplify satisfies from the local token cache if it hasn't
+        // expired. Without this split, every protected page load required
+        // network even for an already-valid cached session, which silently
+        // broke the offline access this app is supposed to provide.
+        const session = navigator.onLine
+          ? await fetchAuthSession({ forceRefresh: true })
+          : await fetchAuthSession()
+
         const groups = session.tokens?.idToken?.payload['cognito:groups'] || []
         setAuthenticated(true)
         setAuthorized(

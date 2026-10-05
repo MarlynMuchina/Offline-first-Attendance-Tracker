@@ -34,6 +34,8 @@ type Teacher @model @auth(rules: [
   first_name: String!
   last_name: String!
   email: AWSEmail
+  phone_number: AWSPhone
+  cognito_sub: String @index(name: "byCognitoSub")
   created_at: AWSDateTime!
   updated_at: AWSDateTime!
 }
@@ -47,7 +49,7 @@ type Class @model @auth(rules: [
   name: String!
   grade: String!
   stream: String
-  teacher_id: ID
+  teacher_id: ID @index(name: "byTeacher")
   created_at: AWSDateTime!
   updated_at: AWSDateTime!
 }
@@ -87,6 +89,20 @@ type MarkAttendanceResult {
   marked_at: AWSDateTime!
 }
 
+input CreateTeacherAccountInput {
+  school_id: ID!
+  first_name: String!
+  last_name: String!
+  email: AWSEmail
+  phone_number: AWSPhone!
+}
+
+type CreateTeacherAccountResult {
+  teacher_id: ID!
+  phone_number: AWSPhone!
+  temporary_password: String!
+}
+
 type Mutation {
   markAttendance(input: MarkAttendanceInput!): MarkAttendanceResult
     @function(name: "markAttendanceFunction")
@@ -94,6 +110,10 @@ type Mutation {
     sendAttendanceAlert(input: SendAttendanceAlertInput!): SendAlertResult
     @function(name: "sendSmsFunction")
     @auth(rules: [{ allow: groups, groups: ["Admin", "HeadTeacher", "Teacher"] }])
+
+    createTeacherAccount(input: CreateTeacherAccountInput!): CreateTeacherAccountResult
+    @function(name: "createTeacherAccountFunction")
+    @auth(rules: [{ allow: groups, groups: ["Admin", "HeadTeacher"] }])
 
 }
 
@@ -141,6 +161,14 @@ type Query {
   predictAttendanceRisk(input: PredictAttendanceRiskInput!): AttendanceRiskResult
     @function(name: "predictAttendanceRiskFunction")
     @auth(rules: [{ allow: groups, groups: ["Admin", "HeadTeacher", "Teacher"] }])
+}
+
+type AdminSessionTracker @model @auth(rules: [
+  { allow: groups, groups: ["Admin", "HeadTeacher"], operations: [create, read, update] }
+]) {
+  id: ID!  # equals school_id -- one record per school, overwritten on each admin login
+  admin_phone: String!
+  signed_in_at: AWSDateTime!
 }
 
 type NotificationLog @model @auth(rules: [

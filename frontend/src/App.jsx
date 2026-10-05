@@ -3,6 +3,7 @@ import Login from './pages/Login'
 import Teacher from './pages/Teacher'
 import Admin from './pages/Admin'
 import AdminSettings from './pages/AdminSettings'
+import ClassManagement from './pages/ClassManagement'
 import ProtectedRoute from './components/ProtectedRoute'
 
 export default function App() {
@@ -35,6 +36,11 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/admin/classes" element={
+        <ProtectedRoute allowedGroups={['Admin', 'HeadTeacher']}>
+         <ClassManagement />
+         </ProtectedRoute>
+         } />
       </Routes>
     </BrowserRouter>
   )
