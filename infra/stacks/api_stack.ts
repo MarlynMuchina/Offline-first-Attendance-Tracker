@@ -116,6 +116,40 @@ export class ApiStack extends cdk.Stack {
   this, 'ImportedNotificationTable', 'NotificationLog-wtgwzva7hvcrljtyfsbjgqiora-NONE'
 );
 
+const teacherTable = dynamodb.Table.fromTableName(
+  this, 'ImportedTeacherTable', 'Teacher-wtgwzva7hvcrljtyfsbjgqiora-NONE'
+);
+
+// ---- createTeacherAccount function ----
+// Admin-privileged: creates a real Cognito login for a new teacher (not
+// just a DynamoDB record), adds them to the Teacher group, and links the
+// two via cognito_sub -- replaces what was previously a manual multi-step
+// CLI process (admin-create-user, admin-add-user-to-group, a separate
+// dynamodb update-item to link cognito_sub).
+const createTeacherAccountFn = new lambda.Function(this, 'CreateTeacherAccountFunction', {
+  functionName: 'createTeacherAccountFunction',
+  runtime: lambda.Runtime.NODEJS_18_X,
+  handler: 'index.handler',
+  timeout: cdk.Duration.seconds(15),
+  code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/createTeacherAccount')),
+  environment: {
+    USER_POOL_ID: props.userPool.userPoolId,
+    TEACHER_TABLE: teacherTable.tableName,
+  },
+});
+
+teacherTable.grantWriteData(createTeacherAccountFn);
+
+// Admin-level Cognito permissions, scoped to this specific user pool only
+// -- never '*', even though these are inherently privileged actions.
+createTeacherAccountFn.addToRolePolicy(new iam.PolicyStatement({
+  actions: [
+    'cognito-idp:AdminCreateUser',
+    'cognito-idp:AdminAddUserToGroup',
+  ],
+  resources: [props.userPool.userPoolArn],
+}));
+
 const atSecret = secretsmanager.Secret.fromSecretNameV2(
   this, 'AfricasTalkingSecret', 'csg-africastalking-credentials'
 );
@@ -254,6 +288,7 @@ predictAttendanceRiskFn.addToRolePolicy(new iam.PolicyStatement({
           attendanceSummaryFunction: attendanceSummaryFn,
          sendSmsFunction: sendSmsFn,
          predictAttendanceRiskFunction: predictAttendanceRiskFn,
+         createTeacherAccountFunction: createTeacherAccountFn,
       },
     });
 

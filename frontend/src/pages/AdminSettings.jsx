@@ -79,7 +79,7 @@ export default function AdminSettings() {
   const [thresholdPercent, setThresholdPercent] = useState(Math.round(getChronicThreshold() * 100))
   const [thresholdSaved, setThresholdSaved] = useState(false)
 
-// Guardian phone section
+  // Guardian phone section
   const [classId, setClassId] = useState(null)
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
@@ -281,7 +281,6 @@ export default function AdminSettings() {
                 )
               })}
             </tbody>
-          
           </table>
         )}
       </div>
