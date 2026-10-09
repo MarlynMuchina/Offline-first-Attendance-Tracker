@@ -1,6 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { signIn, confirmSignIn, signOut } from 'aws-amplify/auth'
+import { signIn, confirmSignIn, signOut, fetchAuthSession } from 'aws-amplify/auth'
+
+// Sends admins and head teachers to the dashboard and everyone else to the
+// register, based on the Cognito groups in the fresh ID token.
+async function homePathForCurrentUser() {
+  const session = await fetchAuthSession()
+  const groups = session.tokens?.idToken?.payload['cognito:groups'] || []
+  return groups.some((g) => g === 'Admin' || g === 'HeadTeacher') ? '/admin' : '/teacher'
+}
 
 export default function Login() {
   const [phone, setPhone] = useState('')
@@ -17,7 +25,7 @@ export default function Login() {
       const { isSignedIn, nextStep } = await signIn({ username: phone, password })
 
       if (isSignedIn) {
-        navigate('/teacher')
+        navigate(await homePathForCurrentUser())
         return
       }
 
@@ -48,7 +56,7 @@ export default function Login() {
     try {
       const { isSignedIn } = await confirmSignIn({ challengeResponse: newPassword })
       if (isSignedIn) {
-        navigate('/teacher')
+        navigate(await homePathForCurrentUser())
       }
     } catch (err) {
       console.error('Set new password failed:', err)
