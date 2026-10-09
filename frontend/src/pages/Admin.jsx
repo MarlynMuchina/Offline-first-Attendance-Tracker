@@ -422,7 +422,7 @@ useEffect(() => {
     y += 14
 
     doc.setFontSize(13)
-    doc.text(`Students Below 70% Attendance (${stats.chronic.length})`, 14, y)
+    doc.text(`Students Below ${Math.round(getChronicThreshold() * 100)}% Attendance(${stats.chronic.length})`, 14, y)
     y += 8
     doc.setFontSize(10)
 
@@ -554,7 +554,7 @@ useEffect(() => {
         </div>
       </div>
 
-            <h4>Students Below 70% Attendance ({stats.chronic.length})</h4>
+            <h4>Students Below {Math.round(getChronicThreshold() * 100)}% Attendance ({stats.chronic.length})</h4>
       <table>
         <thead>
           <tr>
