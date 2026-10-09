@@ -5,7 +5,8 @@ import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
 import { signOut } from 'aws-amplify/auth'
 import jsPDF from 'jspdf'
-import { getChronicThreshold } from '../lib/settings'
+import { getChronicThreshold, getTermStart, setTermStart, getExamDate, setExamDate } from '../lib/settings'
+import { countSchoolDaysBetween, projectEligibility } from '../lib/examEligibility'
 
 const client = generateClient()
 
@@ -168,6 +169,31 @@ function computeStats(students, records, threshold) {
   return { perStudent, overallRate, chronic }
 }
 
+const ELIGIBILITY_ORDER = { INELIGIBLE: 0, AT_RISK: 1, ON_TRACK: 2, SECURED: 3, NO_DATA: 4 }
+
+const ELIGIBILITY_LABELS = {
+  INELIGIBLE: { text: 'NOT ELIGIBLE', color: '#c00' },
+  AT_RISK: { text: 'AT RISK', color: '#c80' },
+  ON_TRACK: { text: 'ON TRACK', color: '#080' },
+  SECURED: { text: 'ELIGIBLE', color: '#080' },
+  NO_DATA: { text: 'NO DATA', color: '#888' },
+}
+
+function describeEligibility(r) {
+  const pct = Math.round(r.projectedBestRate * 100)
+  switch (r.status) {
+    case 'INELIGIBLE':
+      return `Cannot reach the threshold. Best possible is ${pct}% even with full attendance.`
+    case 'AT_RISK':
+    case 'ON_TRACK':
+      return `Can miss at most ${r.maxMoreAbsences} more day${r.maxMoreAbsences === 1 ? '' : 's'} before the exam.`
+    case 'SECURED':
+      return 'Already meets the threshold for the exam.'
+    default:
+      return 'No attendance recorded this term.'
+  }
+}
+
 export default function Admin() {
   const navigate = useNavigate()
   const [schoolId, setSchoolId] = useState(null)
@@ -186,6 +212,12 @@ const [contextError, setContextError] = useState('')
   const [riskResults, setRiskResults] = useState({}) // { studentId: { risk_level, risk_score, reason } }
   const [riskLoading, setRiskLoading] = useState(false)
   const [riskError, setRiskError] = useState('')
+
+  const [termStart, setTermStartState] = useState(getTermStart)
+  const [examDate, setExamDateState] = useState(getExamDate)
+  const [eligibility, setEligibility] = useState(null) // { remainingDays, threshold, rows }
+  const [eligibilityLoading, setEligibilityLoading] = useState(false)
+  const [eligibilityError, setEligibilityError] = useState('')
 
 const loadData = useCallback(async () => {
   if (!classId) return   // ← add this guard
@@ -311,6 +343,51 @@ useEffect(() => {
       setRiskError(err.message || 'Failed to load risk scores')
     } finally {
       setRiskLoading(false)
+    }
+  }
+
+  // Exam eligibility uses the whole term (term start to today), not the
+  // dashboard's 30-day window, so it fetches its own attendance records.
+  async function handleCheckEligibility() {
+    if (!stats || !classId) return
+    if (!termStart || !examDate) {
+      setEligibilityError('Set the term start date and the exam date first.')
+      return
+    }
+    setTermStart(termStart)
+    setExamDate(examDate)
+    setEligibilityLoading(true)
+    setEligibilityError('')
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      const records = await fetchAllPages(
+        listAttendanceQuery,
+        { classId, startDate: termStart, endDate: today < examDate ? today : examDate },
+        'listAttendanceRecords'
+      )
+      const counts = {}
+      for (const r of records) {
+        const c = counts[r.student_id] || (counts[r.student_id] = { recorded: 0, attended: 0 })
+        c.recorded += 1
+        if (r.status !== 'ABSENT') c.attended += 1
+      }
+      const threshold = getChronicThreshold()
+      const remainingDays = countSchoolDaysBetween(today, examDate)
+      const rows = stats.perStudent.map((p) => {
+        const c = counts[p.student.id] || { recorded: 0, attended: 0 }
+        return {
+          student: p.student,
+          ...c,
+          ...projectEligibility({ ...c, remainingDays, threshold }),
+        }
+      })
+      setEligibility({ remainingDays, threshold, rows })
+    } catch (err) {
+      console.error('Eligibility check failed:', err)
+      const detail = err.errors?.map((e) => e.message).join('; ') || err.message || JSON.stringify(err)
+      setEligibilityError(detail)
+    } finally {
+      setEligibilityLoading(false)
     }
   }
 
@@ -548,6 +625,70 @@ useEffect(() => {
                 })}
             </tbody>
           </table>
+        )}
+      </div>
+
+      <div className="section-divider">
+        <h4>Exam Eligibility</h4>
+        <p className="subtext" style={{ marginBottom: 10 }}>
+          Projects whether each student can still reach the {Math.round(getChronicThreshold() * 100)}% attendance
+          threshold by the exam date, counting attendance from the start of term. Assumes school runs Monday to
+          Friday and does not skip public holidays.
+        </p>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+          <label className="subtext">
+            Term started{' '}
+            <input type="date" value={termStart} onChange={(e) => setTermStartState(e.target.value)} />
+          </label>
+          <label className="subtext">
+            Exam date{' '}
+            <input type="date" value={examDate} onChange={(e) => setExamDateState(e.target.value)} />
+          </label>
+          <button onClick={handleCheckEligibility} disabled={eligibilityLoading} className="btn btn-small">
+            {eligibilityLoading ? 'Checking…' : 'Check Exam Eligibility'}
+          </button>
+        </div>
+        {eligibilityError && <p className="text-error">{eligibilityError}</p>}
+        {eligibility && (
+          <>
+            <p className="subtext" style={{ marginBottom: 8 }}>
+              {eligibility.remainingDays} school day{eligibility.remainingDays === 1 ? '' : 's'} left before the exam.{' '}
+              {eligibility.rows.filter((r) => r.status === 'INELIGIBLE').length} cannot reach the threshold,{' '}
+              {eligibility.rows.filter((r) => r.status === 'AT_RISK').length} at risk.
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Attended so far</th>
+                  <th>Status</th>
+                  <th>What it means</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...eligibility.rows]
+                  .sort((a, b) => ELIGIBILITY_ORDER[a.status] - ELIGIBILITY_ORDER[b.status] || a.maxMoreAbsences - b.maxMoreAbsences)
+                  .map((r) => {
+                    const label = ELIGIBILITY_LABELS[r.status]
+                    return (
+                      <tr key={r.student.id}>
+                        <td>{r.student.first_name} {r.student.last_name}</td>
+                        <td>{r.recorded > 0 ? `${r.attended}/${r.recorded} (${Math.round((r.attended / r.recorded) * 100)}%)` : '—'}</td>
+                        <td>
+                          <span style={{
+                            fontSize: 11, padding: '2px 8px', borderRadius: 10,
+                            color: label.color, border: '1px solid currentColor',
+                          }}>
+                            {label.text}
+                          </span>
+                        </td>
+                        <td className="subtext" style={{ fontSize: 12 }}>{describeEligibility(r)}</td>
+                      </tr>
+                    )
+                  })}
+              </tbody>
+            </table>
+          </>
         )}
       </div>
     </div>
