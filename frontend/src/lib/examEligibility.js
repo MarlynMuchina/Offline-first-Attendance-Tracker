@@ -7,6 +7,11 @@
 // Assumptions: school runs Monday to Friday, public holidays are not
 // excluded, and every remaining school day will be marked for the student.
 
+// School rule: missing more than a third of school days bars a student from
+// sitting the exam. Kept separate from the dashboard's chronic-absence
+// threshold (Admin Settings, default 70%), which is an early warning line.
+export const EXAM_ATTENDANCE_REQUIRED = 2 / 3
+
 // Parses 'YYYY-MM-DD' as a local date so weekday checks don't shift with
 // the browser's timezone.
 function parseDate(str) {

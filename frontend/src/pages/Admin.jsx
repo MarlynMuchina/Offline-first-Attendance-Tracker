@@ -6,7 +6,7 @@ import { generateClient } from 'aws-amplify/api'
 import { signOut } from 'aws-amplify/auth'
 import jsPDF from 'jspdf'
 import { getChronicThreshold, getTermStart, setTermStart, getExamDate, setExamDate } from '../lib/settings'
-import { countSchoolDaysBetween, projectEligibility } from '../lib/examEligibility'
+import { countSchoolDaysBetween, projectEligibility, EXAM_ATTENDANCE_REQUIRED } from '../lib/examEligibility'
 
 const client = generateClient()
 
@@ -371,7 +371,7 @@ useEffect(() => {
         c.recorded += 1
         if (r.status !== 'ABSENT') c.attended += 1
       }
-      const threshold = getChronicThreshold()
+      const threshold = EXAM_ATTENDANCE_REQUIRED
       const remainingDays = countSchoolDaysBetween(today, examDate)
       const rows = stats.perStudent.map((p) => {
         const c = counts[p.student.id] || { recorded: 0, attended: 0 }
@@ -422,7 +422,7 @@ useEffect(() => {
     y += 14
 
     doc.setFontSize(13)
-    doc.text(`Students Below ${Math.round(getChronicThreshold() * 100)}% Attendance(${stats.chronic.length})`, 14, y)
+    doc.text(`Students Below ${Math.round(getChronicThreshold() * 100)}% Attendance (${stats.chronic.length})`, 14, y)
     y += 8
     doc.setFontSize(10)
 
@@ -631,8 +631,9 @@ useEffect(() => {
       <div className="section-divider">
         <h4>Exam Eligibility</h4>
         <p className="subtext" style={{ marginBottom: 10 }}>
-          Projects whether each student can still reach the {Math.round(getChronicThreshold() * 100)}% attendance
-          threshold by the exam date, counting attendance from the start of term. Assumes school runs Monday to
+          A student who misses more than a third of school days (below {(EXAM_ATTENDANCE_REQUIRED * 100).toFixed(1)}%
+          attendance) cannot sit the exam. This projects each student's position by the exam date, counting
+          attendance from the start of term. Assumes school runs Monday to
           Friday and does not skip public holidays.
         </p>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
