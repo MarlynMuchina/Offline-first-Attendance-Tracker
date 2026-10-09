@@ -16,3 +16,24 @@ export function getChronicThreshold() {
 export function setChronicThreshold(value) {
   localStorage.setItem(THRESHOLD_KEY, String(value))
 }
+
+// Exam eligibility dates (YYYY-MM-DD strings). Same localStorage caveat as
+// the threshold above: per-device, not synced across admins.
+const TERM_START_KEY = 'csg_term_start'
+const EXAM_DATE_KEY = 'csg_exam_date'
+
+export function getTermStart() {
+  return localStorage.getItem(TERM_START_KEY) || ''
+}
+
+export function setTermStart(value) {
+  localStorage.setItem(TERM_START_KEY, value)
+}
+
+export function getExamDate() {
+  return localStorage.getItem(EXAM_DATE_KEY) || ''
+}
+
+export function setExamDate(value) {
+  localStorage.setItem(EXAM_DATE_KEY, value)
+}
