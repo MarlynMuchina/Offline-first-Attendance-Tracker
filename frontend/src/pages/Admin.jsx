@@ -1,4 +1,4 @@
-import { getCurrentUserContext, getClassIdForSchool } from '../lib/auth'
+import { getCurrentUserContext, getClassesForSchool } from '../lib/auth'
 import ReactMarkdown from 'react-markdown'
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -198,8 +198,9 @@ export default function Admin() {
   const navigate = useNavigate()
   const [schoolId, setSchoolId] = useState(null)
 const [classId, setClassId] = useState(null)
+const [classes, setClasses] = useState([])
 const [contextError, setContextError] = useState('')
-  const [{ startDate, endDate }] = useState(defaultDateRange)
+  const [{ startDate, endDate }, setDateRange] = useState(defaultDateRange)
   const [adminWarning, setAdminWarning] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -246,9 +247,10 @@ useEffect(() => {
   async function resolveContext() {
     try {
       const { schoolId: sid, phoneNumber } = await getCurrentUserContext()
-      const cid = await getClassIdForSchool(sid)
+      const schoolClasses = await getClassesForSchool(sid)
       setSchoolId(sid)
-      setClassId(cid)
+      setClasses(schoolClasses)
+      setClassId(schoolClasses[0].id)
       checkAndClaimAdminSession(sid, phoneNumber)
     } catch (err) {
       setContextError(err.message)
@@ -297,6 +299,17 @@ useEffect(() => {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  // Summary and risk scores belong to one class and date range, so clear
+  // them whenever the admin picks a different one.
+  function changeView({ nextClassId = classId, nextStart = startDate, nextEnd = endDate }) {
+    setSummary(null)
+    setSummaryError('')
+    setRiskResults({})
+    setRiskError('')
+    setClassId(nextClassId)
+    setDateRange({ startDate: nextStart, endDate: nextEnd })
+  }
 
   async function handleGenerateSummary() {
     setSummaryLoading(true)
@@ -405,9 +418,10 @@ useEffect(() => {
 
     doc.setFontSize(10)
     doc.setTextColor(120)
-    doc.text(`Date range: ${startDate} to ${endDate}`, 14, y)
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, y + 5)
-    y += 16
+    doc.text(`Class: ${classes.find((c) => c.id === classId)?.name || classId}`, 14, y)
+    doc.text(`Date range: ${startDate} to ${endDate}`, 14, y + 5)
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, y + 10)
+    y += 21
 
     doc.setTextColor(0)
     doc.setFontSize(13)
@@ -522,6 +536,34 @@ useEffect(() => {
           <button onClick={() => setAdminWarning('')} style={{ fontSize: 12, padding: '2px 8px' }}>Dismiss</button>
         </div>
       )}
+      <div className="button-group" style={{ alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+        <label className="subtext">
+          Class{' '}
+          <select value={classId || ''} onChange={(e) => changeView({ nextClassId: e.target.value })}>
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="subtext">
+          From{' '}
+          <input
+            type="date"
+            value={startDate}
+            max={endDate}
+            onChange={(e) => e.target.value && changeView({ nextStart: e.target.value })}
+          />
+        </label>
+        <label className="subtext">
+          To{' '}
+          <input
+            type="date"
+            value={endDate}
+            min={startDate}
+            onChange={(e) => e.target.value && changeView({ nextEnd: e.target.value })}
+          />
+        </label>
+      </div>
       <p className="subtext">Showing data from {startDate} to {endDate}</p>
 
       <div className="card-row">

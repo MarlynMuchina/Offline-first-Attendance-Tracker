@@ -3,35 +3,24 @@ import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
 import { signOut } from 'aws-amplify/auth'
 import { getChronicThreshold, setChronicThreshold } from '../lib/settings'
-import { getCurrentUserContext, getClassIdForSchool } from '../lib/auth'
+import { getCurrentUserContext, getClassesForSchool } from '../lib/auth'
 
 const client = generateClient()
 
 const listStudentsQuery = /* GraphQL */ `
-  query ListStudentsWithPhone($classId: ID, $nextToken: String) {
-    listStudents(filter: { class_id: { eq: $classId } }, limit: 100, nextToken: $nextToken) {
+  query ListStudentsWithPhone($schoolId: ID, $nextToken: String) {
+    listStudents(filter: { school_id: { eq: $schoolId } }, limit: 1000, nextToken: $nextToken) {
       items {
         id
         first_name
         last_name
+        class_id
         guardian_phone
       }
       nextToken
     }
   }
 `
-
-// limit is applied before the filter, so follow nextToken to get the full roster
-async function fetchClassRoster(classId) {
-  const students = []
-  let nextToken = null
-  do {
-    const res = await client.graphql({ query: listStudentsQuery, variables: { classId, nextToken } })
-    students.push(...res.data.listStudents.items)
-    nextToken = res.data.listStudents.nextToken
-  } while (nextToken)
-  return students
-}
 
 const updateStudentMutation = /* GraphQL */ `
   mutation UpdateStudentPhone($input: UpdateStudentInput!) {
@@ -64,6 +53,21 @@ const listNotificationLogsQuery = /* GraphQL */ `
   }
 `
 
+async function fetchAllSchoolStudents(schoolId) {
+  let items = []
+  let nextToken = null
+  do {
+    const res = await client.graphql({
+      query: listStudentsQuery,
+      variables: { schoolId, nextToken },
+    })
+    const page = res.data.listStudents
+    items = items.concat(page.items)
+    nextToken = page.nextToken
+  } while (nextToken)
+  return items
+}
+
 // Amplify list queries truncate at their limit BEFORE applying filters (the
 // same gotcha documented for listClasses in auth.js), so a 30-day window
 // with many students could theoretically need more than one page even
@@ -93,7 +97,8 @@ export default function AdminSettings() {
   const [thresholdSaved, setThresholdSaved] = useState(false)
 
   // Guardian phone section
-  const [classId, setClassId] = useState(null)
+  const [schoolId, setSchoolId] = useState(null)
+  const [classNames, setClassNames] = useState({}) // { classId: name }
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -107,8 +112,8 @@ export default function AdminSettings() {
   const [notifError, setNotifError] = useState('')
   const [studentNames, setStudentNames] = useState({}) // { studentId: "First Last" }, for display
 
-  const loadNotificationLogs = useCallback(async (resolvedClassId, schoolId) => {
-    if (!resolvedClassId || !schoolId) return
+  const loadNotificationLogs = useCallback(async (resolvedSchoolId) => {
+    if (!resolvedSchoolId) return
     setNotifLoading(true)
     setNotifError('')
     try {
@@ -116,8 +121,8 @@ export default function AdminSettings() {
       cutoff.setDate(cutoff.getDate() - 30)
 
       const [logs, roster] = await Promise.all([
-        fetchAllNotificationPages(schoolId, cutoff.toISOString()),
-        fetchClassRoster(resolvedClassId),
+        fetchAllNotificationPages(resolvedSchoolId, cutoff.toISOString()),
+        fetchAllSchoolStudents(resolvedSchoolId),
       ])
 
       logs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
@@ -137,12 +142,19 @@ export default function AdminSettings() {
     }
   }, [])
 
-  const loadStudents = useCallback(async (resolvedClassId) => {
-    if (!resolvedClassId) return
+  const loadStudents = useCallback(async (resolvedSchoolId) => {
+    if (!resolvedSchoolId) return
     setLoading(true)
     setError('')
     try {
-      setStudents(await fetchClassRoster(resolvedClassId))
+      const all = await fetchAllSchoolStudents(resolvedSchoolId)
+      // Students removed from the school have class_id cleared; skip them.
+      const enrolled = all.filter((s) => s.class_id)
+      enrolled.sort((a, b) =>
+        a.class_id.localeCompare(b.class_id) ||
+        `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`)
+      )
+      setStudents(enrolled)
     } catch (err) {
       console.error('Failed to load students:', err)
       const detail = err.errors?.map((e) => e.message).join('; ') || err.message
@@ -155,13 +167,14 @@ export default function AdminSettings() {
   useEffect(() => {
     async function resolveAndLoad() {
       try {
-        const { schoolId } = await getCurrentUserContext()
-        const cid = await getClassIdForSchool(schoolId)
-        setClassId(cid)
-        await Promise.all([
-          loadStudents(cid),
-          loadNotificationLogs(cid, schoolId),
+        const { schoolId: sid } = await getCurrentUserContext()
+        setSchoolId(sid)
+        const [schoolClasses] = await Promise.all([
+          getClassesForSchool(sid),
+          loadStudents(sid),
+          loadNotificationLogs(sid),
         ])
+        setClassNames(Object.fromEntries(schoolClasses.map((c) => [c.id, c.name])))
       } catch (err) {
         console.error('Failed to resolve school/class context:', err)
         setError(err.message)
@@ -194,7 +207,7 @@ export default function AdminSettings() {
           },
         },
       })
-      await loadStudents(classId)
+      await loadStudents(schoolId)
       setEditedPhones((prev) => {
         const next = { ...prev }
         delete next[studentId]
@@ -250,7 +263,7 @@ export default function AdminSettings() {
       </div>
 
       <div style={{ border: '1px solid #ddd', borderRadius: 6, padding: 16, marginTop: 16 }}>
-        <h4>Guardian Phone Numbers — Form 2 East</h4>
+        <h4>Guardian Phone Numbers</h4>
         {loading && <p style={{ fontSize: 13, color: '#888' }}>Loading…</p>}
         {error && <p style={{ color: 'red', fontSize: 13 }}>{error}</p>}
         {saveError && <p style={{ color: 'red', fontSize: 13 }}>{saveError}</p>}
@@ -259,6 +272,7 @@ export default function AdminSettings() {
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
                 <th>Student</th>
+                <th>Class</th>
                 <th>Guardian Phone</th>
                 <th></th>
               </tr>
@@ -270,6 +284,7 @@ export default function AdminSettings() {
                 return (
                   <tr key={s.id} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={{ padding: '8px 0' }}>{s.first_name} {s.last_name}</td>
+                    <td>{classNames[s.class_id] || s.class_id}</td>
                     <td>
                       <input
                         value={currentValue}
