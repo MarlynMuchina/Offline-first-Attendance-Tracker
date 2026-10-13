@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
 import { signOut } from 'aws-amplify/auth'
 import jsPDF from 'jspdf'
+import { NETWORK_SCHOOL_ID } from '../lib/schools'
 import { getChronicThreshold, getTermStart, setTermStart, getExamDate, setExamDate } from '../lib/settings'
 import { countSchoolDaysBetween, projectEligibility, EXAM_ATTENDANCE_REQUIRED } from '../lib/examEligibility'
 
@@ -209,6 +210,7 @@ const [contextError, setContextError] = useState('')
   const [summary, setSummary] = useState(null)
   const [summaryLoading, setSummaryLoading] = useState(false)
     const [summaryError, setSummaryError] = useState('')
+  const [summaryExpanded, setSummaryExpanded] = useState(false)
 
   const [riskResults, setRiskResults] = useState({}) // { studentId: { risk_level, risk_score, reason } }
   const [riskLoading, setRiskLoading] = useState(false)
@@ -247,6 +249,10 @@ useEffect(() => {
   async function resolveContext() {
     try {
       const { schoolId: sid, phoneNumber } = await getCurrentUserContext()
+      if (sid === NETWORK_SCHOOL_ID) {
+        navigate('/network', { replace: true })
+        return
+      }
       const schoolClasses = await getClassesForSchool(sid)
       setSchoolId(sid)
       setClasses(schoolClasses)
@@ -322,6 +328,7 @@ useEffect(() => {
         },
       })
       setSummary(res.data.generateAttendanceSummary)
+      setSummaryExpanded(false)
     } catch (err) {
       console.error('AI summary failed:', err)
       const detail = err.errors?.map((e) => e.message).join('; ') || err.message || JSON.stringify(err)
@@ -584,13 +591,31 @@ useEffect(() => {
           {summaryError && <p className="text-error">{summaryError}</p>}
           {summary && (
             <>
-              <div style={{ fontSize: 13 }} className="markdown-body">
+              {/* Collapsed to a short preview so a long summary doesn't push
+                  the rest of the dashboard down. */}
+              <div
+                style={{
+                  fontSize: 13,
+                  maxHeight: summaryExpanded ? 'none' : '8em',
+                  overflow: 'hidden',
+                  ...(summaryExpanded ? {} : {
+                    maskImage: 'linear-gradient(to bottom, black 60%, transparent)',
+                    WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent)',
+                  }),
+                }}
+                className="markdown-body"
+              >
                 <ReactMarkdown>{summary.summary}</ReactMarkdown>
               </div>
               <p className="subtext" style={{ fontSize: 10 }}>
                 Generated at {new Date(summary.generated_at).toLocaleString()}
               </p>
-              <button onClick={handleGenerateSummary} className="btn btn-small">Regenerate</button>
+              <div className="button-group">
+                <button onClick={() => setSummaryExpanded((v) => !v)} className="btn btn-small">
+                  {summaryExpanded ? 'Show less' : 'Read full summary'}
+                </button>
+                <button onClick={handleGenerateSummary} className="btn btn-small">Regenerate</button>
+              </div>
             </>
           )}
         </div>

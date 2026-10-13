@@ -5,6 +5,7 @@ import Teacher from './pages/Teacher'
 import Admin from './pages/Admin'
 import AdminSettings from './pages/AdminSettings'
 import ClassManagement from './pages/ClassManagement'
+import Network from './pages/Network'
 import ProtectedRoute from './components/ProtectedRoute'
 
 export default function App() {
@@ -42,6 +43,14 @@ export default function App() {
          <ClassManagement />
          </ProtectedRoute>
          } />
+        <Route
+          path="/network"
+          element={
+            <ProtectedRoute allowedGroups={['Admin']}>
+              <Network />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
   )
