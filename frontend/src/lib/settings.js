@@ -37,3 +37,17 @@ export function getExamDate() {
 export function setExamDate(value) {
   localStorage.setItem(EXAM_DATE_KEY, value)
 }
+
+// Dashboards open on the current term: from the saved term start to today.
+// Without a term start (or one in the future), they show the last 30 days.
+export function defaultDateRange() {
+  const fmt = (d) => d.toISOString().split('T')[0]
+  const today = fmt(new Date())
+  const termStart = getTermStart()
+  if (termStart && termStart <= today) {
+    return { startDate: termStart, endDate: today }
+  }
+  const start = new Date()
+  start.setDate(start.getDate() - 30)
+  return { startDate: fmt(start), endDate: today }
+}
