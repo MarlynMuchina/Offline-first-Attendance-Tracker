@@ -56,16 +56,13 @@ const listClassesBySchool = /* GraphQL */ `
 `
 
 /**
- * Returns the first classId found for the given schoolId.
- * Used by Admin (who oversees the whole school, not one specific class) --
- * NOT used by Teacher anymore, since that previously handed every signed-in
- * teacher the same first class regardless of who they actually were.
- * See getClassesForCurrentTeacher below for the real per-teacher lookup.
+ * Returns every class in the given school, sorted by name.
+ * Used by the Admin dashboard's class picker.
  */
-export async function getClassIdForSchool(schoolId) {
-  const items = await listAll(listClassesBySchool, { schoolId }, 'listClasses', { stopAtFirst: true })
+export async function getClassesForSchool(schoolId) {
+  const items = await listAll(listClassesBySchool, { schoolId }, 'listClasses')
   if (!items.length) throw new Error(`No class found for school ${schoolId}`)
-  return items[0].id
+  return [...items].sort((a, b) => a.name.localeCompare(b.name))
 }
 
 const getTeacherByCognitoSub = /* GraphQL */ `
