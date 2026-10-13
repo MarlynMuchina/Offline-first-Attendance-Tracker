@@ -9,6 +9,22 @@
  *   node import-real-data.js --dry-run        # parse + validate only, no writes
  *   node import-real-data.js --cleanup-first   # delete old fake test data, then import
  *   node import-real-data.js                   # import only, leave existing data alone
+ *   node import-real-data.js --remove          # delete only the records this import creates
+ *
+ * --remove must be given the same --school and --shift-to as the import it
+ * undoes, since those decide the record ids. Classes, teachers and students
+ * created in the app are never touched.
+ *
+ * Options (combine with any of the above):
+ *   --school SCH01,SCH03    only import these schools (default: all five)
+ *   --guardian-phone +2547XXXXXXXX   use this one number for every guardian
+ *                           instead of the dataset's numbers ("none" leaves
+ *                           them blank). Recommended for demos.
+ *   --shift-to 2026-10-09   move every attendance date forward by whole weeks
+ *                           so the term ends on or just before this date.
+ *                           Weekdays stay the same. The dataset's term ran
+ *                           2026-05-04 to 2026-07-10, which falls outside the
+ *                           dashboard's default last-30-days window.
  *
  * Expects these CSVs in the same directory:
  *   CSG_Classes_Master.csv
@@ -42,6 +58,45 @@ const TABLES = {
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const CLEANUP_FIRST = process.argv.includes('--cleanup-first');
+const REMOVE = process.argv.includes('--remove');
+
+function argValue(name) {
+  const i = process.argv.indexOf(name);
+  return i === -1 ? null : process.argv[i + 1];
+}
+
+const SCHOOL_FILTER = argValue('--school') ? argValue('--school').split(',').map((s) => s.trim()) : null;
+const SHIFT_TO = argValue('--shift-to');
+// The dataset's guardian numbers may belong to real parents. Once a teacher
+// marks an imported student absent, the threshold SMS looks at the whole
+// imported history, so a low-attendance student would trigger a real text.
+// --guardian-phone replaces every number with one test number, or "none"
+// leaves them blank (alerts are then skipped for imported students).
+const GUARDIAN_PHONE = argValue('--guardian-phone');
+if (GUARDIAN_PHONE && GUARDIAN_PHONE !== 'none' && !/^\+254\d{9}$/.test(GUARDIAN_PHONE)) {
+  console.error('--guardian-phone needs a number like +254712345678, or none');
+  process.exit(1);
+}
+if (SHIFT_TO && !/^\d{4}-\d{2}-\d{2}$/.test(SHIFT_TO)) {
+  console.error('--shift-to needs a date like 2026-10-09');
+  process.exit(1);
+}
+
+function inScope(row) {
+  return !SCHOOL_FILTER || SCHOOL_FILTER.includes(row.school_id);
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function addDays(isoDate, days) {
+  return new Date(Date.parse(`${isoDate}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
+}
+
+// "Form 2 North" -> { grade: "Form 2", stream: "North" }
+function splitClassName(name) {
+  const m = name.match(/^(Form \d+)\s+(.+)$/);
+  return m ? { grade: m[1], stream: m[2] } : { grade: name, stream: '' };
+}
 
 const client = new DynamoDBClient({ region: REGION });
 const doc = DynamoDBDocumentClient.from(client);
@@ -62,7 +117,9 @@ async function batchWriteAll(tableName, items) {
   for (let i = 0; i < items.length; i += CHUNK_SIZE) {
     const chunk = items.slice(i, i + CHUNK_SIZE);
     let requestItems = {
-      [tableName]: chunk.map((item) => ({ PutRequest: { Item: item } })),
+      [tableName]: chunk.map((item) =>
+        REMOVE ? { DeleteRequest: { Key: { id: item.id } } } : { PutRequest: { Item: item } }
+      ),
     };
 
     let attempt = 0;
@@ -81,7 +138,8 @@ async function batchWriteAll(tableName, items) {
     }
 
     written += chunk.length;
-    process.stdout.write(`\r  ${tableName}: ${written}/${items.length} written`);
+    const verb = DRY_RUN ? 'checked' : REMOVE ? 'removed' : 'written';
+    process.stdout.write(`\r  ${tableName}: ${written}/${items.length} ${verb}`);
   }
   console.log();
 }
@@ -108,6 +166,11 @@ async function deleteAllItems(tableName, keyName = 'id') {
 async function main() {
   console.log(`=== CSG Real Data Import ${DRY_RUN ? '(DRY RUN)' : ''} ===\n`);
 
+  if (REMOVE && CLEANUP_FIRST) {
+    throw new Error('Use --remove or --cleanup-first, not both');
+  }
+  if (REMOVE) console.log('--- REMOVE mode: deleting the records listed below ---\n');
+
   if (CLEANUP_FIRST) {
     console.log('--- Cleanup: removing old test/seed data ---');
     await deleteAllItems(TABLES.AttendanceRecord);
@@ -120,14 +183,16 @@ async function main() {
 
   // ---- Classes ----
   console.log('--- Importing Classes ---');
-  const classesRaw = readCsv('CSG_Classes_Master.csv');
+  const classesRaw = readCsv('CSG_Classes_Master.csv').filter(inScope);
+  if (SCHOOL_FILTER && classesRaw.length === 0) {
+    throw new Error(`No classes found for --school ${SCHOOL_FILTER.join(',')}`);
+  }
   const classItems = classesRaw.map((c) => ({
     id: c.class_id,
     __typename: 'Class',
     school_id: c.school_id,
     name: c.class_name,
-    grade: c.class_name, // no separate grade/stream split in source data
-    stream: '',
+    ...splitClassName(c.class_name),
     created_at: now,
     updated_at: now,
   }));
@@ -147,7 +212,7 @@ async function main() {
 
   // ---- Students ----
   console.log('\n--- Importing Students ---');
-  const studentsRaw = readCsv('CSG_Students_Master.csv');
+  const studentsRaw = readCsv('CSG_Students_Master.csv').filter(inScope);
   const studentItems = studentsRaw.map((s) => ({
     id: s.student_id,
     __typename: 'Student',
@@ -155,7 +220,9 @@ async function main() {
     class_id: s.class_id,
     first_name: s.student_name.split(' ')[0],
     last_name: s.student_name.split(' ').slice(1).join(' ') || s.student_name.split(' ')[0],
-    guardian_phone: primaryPhoneByStudent[s.student_id] || null,
+    guardian_phone: GUARDIAN_PHONE === 'none'
+      ? null
+      : GUARDIAN_PHONE || primaryPhoneByStudent[s.student_id] || null,
     status: 'ACTIVE',
     created_at: now,
     updated_at: now,
@@ -165,22 +232,35 @@ async function main() {
 
   // ---- Attendance records ----
   console.log('\n--- Importing Attendance Records ---');
-  const attendanceRaw = readCsv('CSG_Attendance_Daily_Normalized.csv');
+  const attendanceRaw = readCsv('CSG_Attendance_Daily_Normalized.csv').filter(inScope);
   const statusMap = { Present: 'PRESENT', Absent: 'ABSENT', Late: 'LATE' };
-  const attendanceItems = attendanceRaw.map((a) => ({
-    id: a.attendance_id,
-    __typename: 'AttendanceRecord',
-    school_id: a.school_id,
-    student_id: a.student_id,
-    class_id: a.class_id,
-    date: a.date,
-    status: statusMap[a.status] || a.status.toUpperCase(),
-    marked_by: a.marked_by,
-    marked_at: a.marked_at,
-    client_request_id: a.attendance_id, // reuse as a stable idempotency key
-    created_at: now,
-    updated_at: now,
-  }));
+
+  let shiftDays = 0;
+  if (SHIFT_TO) {
+    const lastDate = attendanceRaw.reduce((max, a) => (a.date > max ? a.date : max), '');
+    const gapDays = Math.round((Date.parse(SHIFT_TO) - Date.parse(lastDate)) / DAY_MS);
+    shiftDays = Math.max(0, Math.floor(gapDays / 7) * 7);
+    console.log(`  Shifting dates forward ${shiftDays} days: last day ${lastDate} -> ${addDays(lastDate, shiftDays)}`);
+  }
+
+  const attendanceItems = attendanceRaw.map((a) => {
+    const date = addDays(a.date, shiftDays);
+    return {
+      // Rebuild the id from the shifted date so it still matches the record.
+      id: `ATT#${a.school_id}#${a.student_id}#${date}`,
+      __typename: 'AttendanceRecord',
+      school_id: a.school_id,
+      student_id: a.student_id,
+      class_id: a.class_id,
+      date,
+      status: statusMap[a.status] || a.status.toUpperCase(),
+      reason_code: a.reason_code === 'NONE' ? null : a.reason_code,
+      marked_by: a.marked_by,
+      marked_at: new Date(Date.parse(a.marked_at) + shiftDays * DAY_MS).toISOString(),
+      created_at: now,
+      updated_at: now,
+    };
+  });
   console.log(`  Parsed ${attendanceItems.length} attendance records`);
   await batchWriteAll(TABLES.AttendanceRecord, attendanceItems);
 
