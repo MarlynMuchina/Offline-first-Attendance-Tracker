@@ -10,14 +10,15 @@ import { getCurrentUserContext, getClassesForCurrentTeacher } from '../lib/auth'
 const client = generateClient()
 
 const listStudentsQuery = /* GraphQL */ `
-  query ListStudents($classId: ID!) {
-    listStudents(filter: { class_id: { eq: $classId } }) {
+  query ListStudents($classId: ID!, $nextToken: String) {
+    listStudents(filter: { class_id: { eq: $classId } }, limit: 100, nextToken: $nextToken) {
       items {
         id
         first_name
         last_name
         class_id
       }
+      nextToken
     }
   }
 `
@@ -70,11 +71,17 @@ export default function Teacher() {
 
   const loadStudents = useCallback(async (resolvedClassId) => {
     try {
-      const res = await client.graphql({
-        query: listStudentsQuery,
-        variables: { classId: resolvedClassId },
-      })
-      const fresh = res.data.listStudents.items
+      // limit is applied before the filter, so follow nextToken to get the full roster
+      let fresh = []
+      let nextToken = null
+      do {
+        const res = await client.graphql({
+          query: listStudentsQuery,
+          variables: { classId: resolvedClassId, nextToken },
+        })
+        fresh = fresh.concat(res.data.listStudents.items)
+        nextToken = res.data.listStudents.nextToken
+      } while (nextToken)
       await db.students.bulkPut(fresh)
       setStudents(fresh)
     } catch (err) {
