@@ -11,7 +11,7 @@ const client = generateClient()
 
 const listStudentsQuery = /* GraphQL */ `
   query ListStudents($classId: ID!, $nextToken: String) {
-    listStudents(filter: { class_id: { eq: $classId } }, limit: 100, nextToken: $nextToken) {
+    listStudents(filter: { class_id: { eq: $classId } }, limit: 1000, nextToken: $nextToken) {
       items {
         id
         first_name
@@ -71,7 +71,9 @@ export default function Teacher() {
 
   const loadStudents = useCallback(async (resolvedClassId) => {
     try {
-      // limit is applied before the filter, so follow nextToken to get the full roster
+      // The class filter runs after DynamoDB reads each page, so a page can
+      // come back short or empty while more matches remain. Follow nextToken
+      // until the whole roster is in.
       let fresh = []
       let nextToken = null
       do {
