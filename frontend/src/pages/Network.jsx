@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
 import { signOut } from 'aws-amplify/auth'
 import { getCurrentUserContext } from '../lib/auth'
-import { getChronicThreshold } from '../lib/settings'
+import { getChronicThreshold, defaultDateRange } from '../lib/settings'
 import { EXAM_ATTENDANCE_REQUIRED } from '../lib/examEligibility'
 import { SCHOOLS, NETWORK_SCHOOL_ID, schoolName } from '../lib/schools'
 
@@ -63,13 +63,6 @@ async function fetchAllPages(query, variables, resultKey) {
   return items
 }
 
-function defaultDateRange() {
-  const end = new Date()
-  const start = new Date()
-  start.setDate(start.getDate() - 30)
-  const fmt = (d) => d.toISOString().split('T')[0]
-  return { startDate: fmt(start), endDate: fmt(end) }
-}
 
 // Same measure as the school dashboard: each student's rate is days attended
 // (present or late) over days marked, and a group's rate is the average of

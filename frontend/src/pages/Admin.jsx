@@ -6,7 +6,7 @@ import { generateClient } from 'aws-amplify/api'
 import { signOut } from 'aws-amplify/auth'
 import jsPDF from 'jspdf'
 import { NETWORK_SCHOOL_ID } from '../lib/schools'
-import { getChronicThreshold, getTermStart, setTermStart, getExamDate, setExamDate } from '../lib/settings'
+import { getChronicThreshold, getTermStart, setTermStart, getExamDate, setExamDate, defaultDateRange } from '../lib/settings'
 import { countSchoolDaysBetween, projectEligibility, EXAM_ATTENDANCE_REQUIRED } from '../lib/examEligibility'
 
 const client = generateClient()
@@ -128,13 +128,6 @@ async function fetchAllPages(query, baseVariables, resultKey) {
 }
 
 
-function defaultDateRange() {
-  const end = new Date()
-  const start = new Date()
-  start.setDate(start.getDate() - 30)
-  const fmt = (d) => d.toISOString().split('T')[0]
-  return { startDate: fmt(start), endDate: fmt(end) }
-}
 
 function computeStats(students, records, threshold) {
   const byStudent = {}
@@ -366,8 +359,8 @@ useEffect(() => {
     }
   }
 
-  // Exam eligibility uses the whole term (term start to today), not the
-  // dashboard's 30-day window, so it fetches its own attendance records.
+  // Exam eligibility always uses the whole term (term start to today),
+  // whatever range the dashboard is showing, so it fetches its own records.
   async function handleCheckEligibility() {
     if (!stats || !classId) return
     if (!termStart || !examDate) {
@@ -706,7 +699,15 @@ useEffect(() => {
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
           <label className="subtext">
             Term started{' '}
-            <input type="date" value={termStart} onChange={(e) => setTermStartState(e.target.value)} />
+            <input
+              type="date"
+              value={termStart}
+              onChange={(e) => {
+                // Saved straight away so the dashboard opens on this term next time.
+                setTermStartState(e.target.value)
+                setTermStart(e.target.value)
+              }}
+            />
           </label>
           <label className="subtext">
             Exam date{' '}
