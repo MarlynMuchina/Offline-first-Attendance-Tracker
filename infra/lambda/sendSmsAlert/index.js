@@ -21,7 +21,7 @@ async function getCredentials() {
 
 exports.handler = async (event) => {
   const input = event.arguments?.input ?? event;
-  const { school_id, student_id, guardian_phone, message } = input;
+  const { school_id, student_id, guardian_phone, message, alert_type } = input;
 
   const { apiKey, username } = await getCredentials();
   const at = require('africastalking')({ apiKey, username });
@@ -35,6 +35,9 @@ exports.handler = async (event) => {
     atResult = await at.SMS.send({ to: [guardian_phone], message });
     const recipientStatus = atResult?.SMSMessageData?.Recipients?.[0]?.status;
     status = recipientStatus === 'Success' ? 'SENT' : 'FAILED';
+    if (status === 'FAILED') {
+      console.error('Africa\'s Talking did not accept the message:', JSON.stringify(atResult));
+    }
   } catch (err) {
     console.error('Africa\'s Talking send failed:', err);
     status = 'FAILED';
@@ -53,6 +56,7 @@ exports.handler = async (event) => {
       status,
       sent_at: now,
       created_at: now,
+      ...(alert_type && { alert_type }),
     },
   }));
 
