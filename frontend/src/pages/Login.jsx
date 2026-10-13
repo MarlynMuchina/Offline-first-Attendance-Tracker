@@ -1,13 +1,17 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { signIn, confirmSignIn, signOut, fetchAuthSession } from 'aws-amplify/auth'
+import { NETWORK_SCHOOL_ID } from '../lib/schools'
 
-// Sends admins and head teachers to the dashboard and everyone else to the
-// register, based on the Cognito groups in the fresh ID token.
+// Sends Angaza staff to the network view, admins and head teachers to the
+// dashboard and everyone else to the register, based on the fresh ID token.
 async function homePathForCurrentUser() {
   const session = await fetchAuthSession()
-  const groups = session.tokens?.idToken?.payload['cognito:groups'] || []
-  return groups.some((g) => g === 'Admin' || g === 'HeadTeacher') ? '/admin' : '/teacher'
+  const payload = session.tokens?.idToken?.payload || {}
+  const groups = payload['cognito:groups'] || []
+  const isAdmin = groups.some((g) => g === 'Admin' || g === 'HeadTeacher')
+  if (isAdmin && payload['custom:school_id'] === NETWORK_SCHOOL_ID) return '/network'
+  return isAdmin ? '/admin' : '/teacher'
 }
 
 export default function Login() {
