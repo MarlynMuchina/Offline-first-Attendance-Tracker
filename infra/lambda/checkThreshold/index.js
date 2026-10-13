@@ -11,14 +11,25 @@ const NOTIFICATION_TABLE = process.env.NOTIFICATION_TABLE;
 const STUDENT_TABLE = process.env.STUDENT_TABLE;
 const SEND_SMS_FUNCTION_NAME = process.env.SEND_SMS_FUNCTION_NAME;
 
-const CONSECUTIVE_ABSENCE_THRESHOLD = 3;
-const MONTHLY_RATE_THRESHOLD = 0.70;
-const DEDUP_WINDOW_DAYS = 7;
+// Parents get at most two texts per student, one per stage:
+//   WARNING    -- attendance has dropped below 70% (the early-warning line)
+//   INELIGIBLE -- attendance has dropped below 2/3 (the exam eligibility line)
+// Nothing is sent until the student has MIN_RECORDS marked days, so a single
+// early absence (which reads as 0%) doesn't trigger a text.
+const WARNING_RATE = 0.70;
+const EXAM_ELIGIBILITY_RATE = 2 / 3;
+const MIN_RECORDS = 10;
 
-function daysAgo(n) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().split('T')[0];
+function formatPercent(rate) {
+  return `${Math.floor(rate * 100)}%`;
+}
+
+function buildMessage(stage, student, rate) {
+  const name = `${student.first_name} ${student.last_name}`;
+  if (stage === 'INELIGIBLE') {
+    return `CSG: ${name}'s attendance is ${formatPercent(rate)}, below the 67% minimum. They are not currently eligible to sit exams. Please contact the school.`;
+  }
+  return `CSG: ${name}'s attendance is ${formatPercent(rate)}, below 70%. Below 67% they will not be eligible to sit exams. Please contact the school.`;
 }
 
 exports.handler = async (event) => {
@@ -30,55 +41,51 @@ exports.handler = async (event) => {
 
   const { student_id, school_id, class_id } = detail;
 
-  const thirtyDaysAgo = daysAgo(30);
   const recordsRes = await doc.send(new QueryCommand({
-  TableName: ATTENDANCE_TABLE,
-  IndexName: 'byStudent',
-  KeyConditionExpression: 'student_id = :sid',
-  FilterExpression: '#d >= :start AND class_id = :cid',
-  ExpressionAttributeNames: { '#d': 'date' },
-  ExpressionAttributeValues: {
-    ':sid': student_id,
-    ':start': thirtyDaysAgo,
-    ':cid': class_id,
-  },
-}));
-
-  const records = (recordsRes.Items || []).sort((a, b) => a.date.localeCompare(b.date));
-
-  let consecutiveAbsences = 0;
-  for (let i = records.length - 1; i >= 0; i--) {
-    if (records[i].status === 'ABSENT') {
-      consecutiveAbsences++;
-    } else {
-      break;
-    }
-  }
-  const hitConsecutive = consecutiveAbsences >= CONSECUTIVE_ABSENCE_THRESHOLD;
-
-  const total = records.length;
-  const present = records.filter((r) => r.status !== 'ABSENT').length;
-  const rate = total > 0 ? present / total : 1;
-  const hitRateThreshold = total > 0 && rate < MONTHLY_RATE_THRESHOLD;
-
-  if (!hitConsecutive && !hitRateThreshold) {
-    return { triggered: false };
-  }
-
-  const dedupCutoff = daysAgo(DEDUP_WINDOW_DAYS);
-  const recentAlerts = await doc.send(new QueryCommand({
-    TableName: NOTIFICATION_TABLE,
+    TableName: ATTENDANCE_TABLE,
     IndexName: 'byStudent',
     KeyConditionExpression: 'student_id = :sid',
-    FilterExpression: 'created_at >= :cutoff',
+    FilterExpression: 'class_id = :cid',
     ExpressionAttributeValues: {
       ':sid': student_id,
-      ':cutoff': dedupCutoff,
+      ':cid': class_id,
     },
   }));
 
-  if ((recentAlerts.Items || []).length > 0) {
-    return { triggered: true, skipped: 'already alerted within dedup window' };
+  const records = recordsRes.Items || [];
+  const total = records.length;
+  if (total < MIN_RECORDS) {
+    return { triggered: false, reason: `only ${total} marked days, need ${MIN_RECORDS}` };
+  }
+
+  const present = records.filter((r) => r.status !== 'ABSENT').length;
+  const rate = present / total;
+
+  let stage = null;
+  if (rate < EXAM_ELIGIBILITY_RATE) stage = 'INELIGIBLE';
+  else if (rate < WARNING_RATE) stage = 'WARNING';
+
+  if (!stage) {
+    return { triggered: false };
+  }
+
+  // One text per stage per student. Failed sends don't count, so the next
+  // absence retries them.
+  const sentRes = await doc.send(new QueryCommand({
+    TableName: NOTIFICATION_TABLE,
+    IndexName: 'byStudent',
+    KeyConditionExpression: 'student_id = :sid',
+    FilterExpression: 'alert_type = :stage AND #s = :sent',
+    ExpressionAttributeNames: { '#s': 'status' },
+    ExpressionAttributeValues: {
+      ':sid': student_id,
+      ':stage': stage,
+      ':sent': 'SENT',
+    },
+  }));
+
+  if ((sentRes.Items || []).length > 0) {
+    return { triggered: true, stage, skipped: 'parent already notified at this stage' };
   }
 
   const studentRes = await doc.send(new GetCommand({
@@ -89,14 +96,8 @@ exports.handler = async (event) => {
 
   if (!student?.guardian_phone) {
     console.error(`No guardian_phone on file for student ${student_id}, cannot send alert`);
-    return { triggered: true, skipped: 'no guardian phone on file' };
+    return { triggered: true, stage, skipped: 'no guardian phone on file' };
   }
-
-  const reason = hitConsecutive
-    ? `${consecutiveAbsences} consecutive absences`
-    : `attendance rate ${Math.round(rate * 100)}% (below 70%)`;
-
-  const message = `Attendance alert: ${student.first_name} ${student.last_name} has ${reason}. Please contact the school if you have questions.`;
 
   await lambdaClient.send(new InvokeCommand({
     FunctionName: SEND_SMS_FUNCTION_NAME,
@@ -105,9 +106,12 @@ exports.handler = async (event) => {
       school_id,
       student_id,
       guardian_phone: student.guardian_phone,
-      message,
+      message: buildMessage(stage, student, rate),
+      alert_type: stage,
     }),
   }));
 
-  return { triggered: true, reason };
+  return { triggered: true, stage, rate };
 };
+
+exports.buildMessage = buildMessage;
