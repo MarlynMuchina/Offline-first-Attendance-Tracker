@@ -6,6 +6,7 @@ import { getCurrentUserContext } from '../lib/auth'
 import { getChronicThreshold, defaultDateRange } from '../lib/settings'
 import { EXAM_ATTENDANCE_REQUIRED } from '../lib/examEligibility'
 import { SCHOOLS, NETWORK_SCHOOL_ID, schoolName } from '../lib/schools'
+import SchoolAdmins from '../components/SchoolAdmins'
 
 const client = generateClient()
 
@@ -247,6 +248,8 @@ export default function Network() {
           </table>
         </>
       )}
+
+      {allowed && <SchoolAdmins />}
     </div>
   )
 }
