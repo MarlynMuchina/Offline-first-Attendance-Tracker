@@ -4,6 +4,7 @@ import { generateClient } from 'aws-amplify/api'
 import { signOut } from 'aws-amplify/auth'
 import { getChronicThreshold, setChronicThreshold } from '../lib/settings'
 import { getCurrentUserContext, getClassesForSchool } from '../lib/auth'
+import { SMS_PREFERENCES, DEFAULT_SMS_PREFERENCE } from '../lib/smsPreference'
 
 const client = generateClient()
 
@@ -16,6 +17,7 @@ const listStudentsQuery = /* GraphQL */ `
         last_name
         class_id
         guardian_phone
+        sms_preference
       }
       nextToken
     }
@@ -23,10 +25,11 @@ const listStudentsQuery = /* GraphQL */ `
 `
 
 const updateStudentMutation = /* GraphQL */ `
-  mutation UpdateStudentPhone($input: UpdateStudentInput!) {
+  mutation UpdateStudentGuardian($input: UpdateStudentInput!) {
     updateStudent(input: $input) {
       id
       guardian_phone
+      sms_preference
     }
   }
 `
@@ -103,6 +106,7 @@ export default function AdminSettings() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [editedPhones, setEditedPhones] = useState({}) // { studentId: newValue }
+  const [editedPrefs, setEditedPrefs] = useState({}) // { studentId: sms_preference }
   const [savingId, setSavingId] = useState(null)
   const [saveError, setSaveError] = useState('')
 
@@ -193,7 +197,7 @@ export default function AdminSettings() {
     setTimeout(() => setThresholdSaved(false), 2000)
   }
 
-  async function handleSavePhone(studentId) {
+  async function handleSaveGuardian(studentId) {
     setSavingId(studentId)
     setSaveError('')
     try {
@@ -202,17 +206,20 @@ export default function AdminSettings() {
         variables: {
           input: {
             id: studentId,
-            guardian_phone: editedPhones[studentId],
+            ...(editedPhones[studentId] !== undefined && { guardian_phone: editedPhones[studentId] }),
+            ...(editedPrefs[studentId] !== undefined && { sms_preference: editedPrefs[studentId] }),
             updated_at: new Date().toISOString(),
           },
         },
       })
       await loadStudents(schoolId)
-      setEditedPhones((prev) => {
+      const without = (prev) => {
         const next = { ...prev }
         delete next[studentId]
         return next
-      })
+      }
+      setEditedPhones(without)
+      setEditedPrefs(without)
     } catch (err) {
       console.error('Failed to update phone:', err)
       const detail = err.errors?.map((e) => e.message).join('; ') || err.message
@@ -263,7 +270,10 @@ export default function AdminSettings() {
       </div>
 
       <div style={{ border: '1px solid #ddd', borderRadius: 6, padding: 16, marginTop: 16 }}>
-        <h4>Guardian Phone Numbers</h4>
+        <h4>Guardian Phones and SMS Alerts</h4>
+        <p style={{ fontSize: 12, color: '#888' }}>
+          Each guardian chooses whether to get a text for every absence, or only when attendance drops below 70% and below the exam line.
+        </p>
         {loading && <p style={{ fontSize: 13, color: '#888' }}>Loading…</p>}
         {error && <p style={{ color: 'red', fontSize: 13 }}>{error}</p>}
         {saveError && <p style={{ color: 'red', fontSize: 13 }}>{saveError}</p>}
@@ -274,13 +284,18 @@ export default function AdminSettings() {
                 <th>Student</th>
                 <th>Class</th>
                 <th>Guardian Phone</th>
+                <th>Texts</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {students.map((s) => {
                 const currentValue = editedPhones[s.id] ?? s.guardian_phone ?? ''
-                const isDirty = editedPhones[s.id] !== undefined && editedPhones[s.id] !== s.guardian_phone
+                const savedPref = s.sms_preference || DEFAULT_SMS_PREFERENCE
+                const currentPref = editedPrefs[s.id] ?? savedPref
+                const isDirty =
+                  (editedPhones[s.id] !== undefined && editedPhones[s.id] !== s.guardian_phone) ||
+                  currentPref !== savedPref
                 return (
                   <tr key={s.id} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={{ padding: '8px 0' }}>{s.first_name} {s.last_name}</td>
@@ -296,8 +311,21 @@ export default function AdminSettings() {
                       />
                     </td>
                     <td>
+                      <select
+                        value={currentPref}
+                        onChange={(e) =>
+                          setEditedPrefs((prev) => ({ ...prev, [s.id]: e.target.value }))
+                        }
+                        style={{ padding: 4, fontSize: 12 }}
+                      >
+                        {SMS_PREFERENCES.map((p) => (
+                          <option key={p.value} value={p.value}>{p.label}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
                       <button
-                        onClick={() => handleSavePhone(s.id)}
+                        onClick={() => handleSaveGuardian(s.id)}
                         disabled={!isDirty || savingId === s.id}
                         style={{ fontSize: 11, padding: '4px 8px' }}
                       >

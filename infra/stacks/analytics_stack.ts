@@ -52,7 +52,7 @@ export class AnalyticsStack extends cdk.Stack {
         STUDENT_TABLE: studentTable.tableName,
         CLASS_TABLE: classTable.tableName,
         EXPORT_BUCKET: exportBucket.bucketName,
-        SCHOOL_ID: 'school-001', // TODO: multi-school once Admin module exists
+        SCHOOL_IDS: 'SCH01,SCH02,SCH03,SCH04,SCH05',
       },
     });
 
