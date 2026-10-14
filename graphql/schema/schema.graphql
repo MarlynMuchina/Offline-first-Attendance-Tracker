@@ -20,6 +20,7 @@ type Student @model @auth(rules: [
   last_name: String!
   class_id: ID @index(name: "byClass")
   guardian_phone: AWSPhone
+  sms_preference: String     # THRESHOLD (default) | EVERY_ABSENCE
   status: String
   created_at: AWSDateTime!
   updated_at: AWSDateTime!

@@ -10,9 +10,14 @@ const ATTENDANCE_TABLE = process.env.ATTENDANCE_TABLE;
 const STUDENT_TABLE = process.env.STUDENT_TABLE;
 const CLASS_TABLE = process.env.CLASS_TABLE;
 const EXPORT_BUCKET = process.env.EXPORT_BUCKET;
-const SCHOOL_ID = process.env.SCHOOL_ID || 'school-001'; // TODO: multi-school once Admin module exists
+// Every pilot school goes into one file, so a network-wide dashboard can be
+// built from a single dataset. Override with a comma-separated SCHOOL_IDS.
+const SCHOOL_IDS = (process.env.SCHOOL_IDS || 'SCH01,SCH02,SCH03,SCH04,SCH05')
+  .split(',')
+  .map((id) => id.trim())
+  .filter(Boolean);
 
-async function queryAllBySchool(tableName, indexName) {
+async function queryAllBySchool(tableName, indexName, schoolId) {
   const items = [];
   let lastKey;
   do {
@@ -20,7 +25,7 @@ async function queryAllBySchool(tableName, indexName) {
       TableName: tableName,
       IndexName: indexName,
       KeyConditionExpression: 'school_id = :sid',
-      ExpressionAttributeValues: { ':sid': SCHOOL_ID },
+      ExpressionAttributeValues: { ':sid': schoolId },
       ExclusiveStartKey: lastKey,
     }));
     items.push(...(res.Items || []));
@@ -38,10 +43,13 @@ function csvEscape(value) {
 }
 
 exports.handler = async () => {
+  const forAllSchools = async (tableName) =>
+    (await Promise.all(SCHOOL_IDS.map((id) => queryAllBySchool(tableName, 'bySchool', id)))).flat();
+
   const [attendanceRecords, students, classes] = await Promise.all([
-    queryAllBySchool(ATTENDANCE_TABLE, 'bySchool'),
-    queryAllBySchool(STUDENT_TABLE, 'bySchool'),
-    queryAllBySchool(CLASS_TABLE, 'bySchool'),
+    forAllSchools(ATTENDANCE_TABLE),
+    forAllSchools(STUDENT_TABLE),
+    forAllSchools(CLASS_TABLE),
   ]);
 
   const studentMap = Object.fromEntries(students.map((s) => [s.id, `${s.first_name} ${s.last_name}`]));
@@ -63,7 +71,7 @@ exports.handler = async () => {
   const csv = [header, ...rows].map((row) => row.map(csvEscape).join(',')).join('\n');
 
   const today = new Date().toISOString().split('T')[0];
-  const key = `exports/attendance/${SCHOOL_ID}/${today}.csv`;
+  const key = `exports/attendance/all-schools/${today}.csv`;
 
   await s3.send(new PutObjectCommand({
     Bucket: EXPORT_BUCKET,
