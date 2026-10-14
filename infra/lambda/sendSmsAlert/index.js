@@ -21,7 +21,7 @@ async function getCredentials() {
 
 exports.handler = async (event) => {
   const input = event.arguments?.input ?? event;
-  const { school_id, student_id, guardian_phone, message, alert_type } = input;
+  const { school_id, student_id, guardian_phone, message, alert_type, alert_date } = input;
 
   const { apiKey, username } = await getCredentials();
   const at = require('africastalking')({ apiKey, username });
@@ -57,6 +57,7 @@ exports.handler = async (event) => {
       sent_at: now,
       created_at: now,
       ...(alert_type && { alert_type }),
+      ...(alert_date && { alert_date }),
     },
   }));
 
