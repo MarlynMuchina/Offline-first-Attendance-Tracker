@@ -6,6 +6,7 @@
  *  - WARNING below 70%, INELIGIBLE below 2/3
  *  - at most one SENT text per stage per student
  *  - a big drop straight past 2/3 sends only the INELIGIBLE text
+ *  - guardians who chose EVERY_ABSENCE get one text per absent day
  *
  * Run: npx jest checkThreshold.test.js
  */
@@ -37,10 +38,11 @@ process.env.SEND_SMS_FUNCTION_NAME = 'sendSmsFunction';
 const { handler, buildMessage } = require('./index');
 
 const EVENT = {
-  detail: { action: 'CREATED', status: 'ABSENT', student_id: 'S1', school_id: 'SCH01', class_id: 'C1' },
+  detail: { action: 'CREATED', status: 'ABSENT', student_id: 'S1', school_id: 'SCH01', class_id: 'C1', date: '2026-10-14' },
 };
 
 const STUDENT = { id: 'S1', first_name: 'Test', last_name: 'Airtel', guardian_phone: '+254750571345' };
+const EVERY_ABSENCE_STUDENT = { ...STUDENT, sms_preference: 'EVERY_ABSENCE' };
 
 function records(present, absent) {
   return [
@@ -49,14 +51,19 @@ function records(present, absent) {
   ];
 }
 
-// Routes each DynamoDB call to the right fake table.
+// Routes each DynamoDB call to the right fake table. sentAlerts entries are
+// a stage name, or { type: 'ABSENCE', date } for a per-absence text.
 function mockTables({ attendance, sentAlerts = [], student = STUDENT }) {
   mockDocSend.mockImplementation(async (cmd) => {
     if (cmd.type === 'Get') return { Item: student };
     if (cmd.TableName === 'Attendance-test') return { Items: attendance };
     if (cmd.TableName === 'NotificationLog-test') {
-      const stage = cmd.ExpressionAttributeValues[':stage'];
-      return { Items: sentAlerts.filter((a) => a === stage).map((a) => ({ alert_type: a, status: 'SENT' })) };
+      const type = cmd.ExpressionAttributeValues[':type'];
+      const date = cmd.ExpressionAttributeValues[':date'];
+      const matches = sentAlerts
+        .map((a) => (typeof a === 'string' ? { type: a } : a))
+        .filter((a) => a.type === type && (!date || a.date === date));
+      return { Items: matches.map((a) => ({ alert_type: a.type, alert_date: a.date, status: 'SENT' })) };
     }
     throw new Error(`unexpected command ${JSON.stringify(cmd)}`);
   });
@@ -143,4 +150,50 @@ test('messages fit in a single SMS for typical names', () => {
 
 test('the percentage is rounded down so 66.5% never reads as 67%', () => {
   expect(buildMessage('INELIGIBLE', STUDENT, 0.665)).toContain('66%');
+});
+
+test('a guardian who chose every absence is texted on a new student\'s first absence', async () => {
+  mockTables({ attendance: records(0, 1), student: EVERY_ABSENCE_STUDENT });
+  const result = await handler(EVENT);
+  expect(result.stage).toBe('ABSENCE');
+  const payload = sentPayload();
+  expect(payload.alert_type).toBe('ABSENCE');
+  expect(payload.alert_date).toBe('2026-10-14');
+  expect(payload.message).toContain('marked absent on 2026-10-14');
+});
+
+test('every-absence guardians are texted once per absent day', async () => {
+  mockTables({
+    attendance: records(9, 1),
+    student: EVERY_ABSENCE_STUDENT,
+    sentAlerts: [{ type: 'ABSENCE', date: '2026-10-14' }],
+  });
+  const result = await handler(EVENT);
+  expect(result.skipped).toMatch(/already told/);
+  expect(mockLambdaSend).not.toHaveBeenCalled();
+});
+
+test('on the day a stage is crossed, every-absence guardians get only the stage text', async () => {
+  mockTables({ attendance: records(13, 6), student: EVERY_ABSENCE_STUDENT });
+  await handler(EVENT);
+  expect(mockLambdaSend).toHaveBeenCalledTimes(1);
+  expect(sentPayload().alert_type).toBe('WARNING');
+});
+
+test('after the stage text, every-absence guardians still hear about later absences', async () => {
+  mockTables({ attendance: records(15, 7), student: EVERY_ABSENCE_STUDENT, sentAlerts: ['WARNING'] });
+  const result = await handler(EVENT);
+  expect(result.stage).toBe('ABSENCE');
+  expect(sentPayload().alert_type).toBe('ABSENCE');
+});
+
+test('threshold-only guardians are not texted for an ordinary absence', async () => {
+  mockTables({ attendance: records(12, 1) });
+  await handler(EVENT);
+  expect(mockLambdaSend).not.toHaveBeenCalled();
+});
+
+test('the absence text fits in a single SMS', () => {
+  const longName = { first_name: 'Christabel', last_name: 'Wanjiku-Mwangi' };
+  expect(buildMessage('ABSENCE', longName, 0, '2026-10-14').length).toBeLessThanOrEqual(160);
 });

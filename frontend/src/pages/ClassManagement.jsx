@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
 import { signOut } from 'aws-amplify/auth'
 import { getCurrentUserContext } from '../lib/auth'
+import { SMS_PREFERENCES, DEFAULT_SMS_PREFERENCE } from '../lib/smsPreference'
 
 const client = generateClient()
 
@@ -201,6 +202,7 @@ export default function ClassManagement() {
   const [newStudentFirstName, setNewStudentFirstName] = useState('')
   const [newStudentLastName, setNewStudentLastName] = useState('')
   const [newStudentPhone, setNewStudentPhone] = useState('')
+  const [newStudentSmsPreference, setNewStudentSmsPreference] = useState(DEFAULT_SMS_PREFERENCE)
   const [newStudentClassId, setNewStudentClassId] = useState('')
   const [addingStudent, setAddingStudent] = useState(false)
   const [studentActionError, setStudentActionError] = useState('')
@@ -604,6 +606,7 @@ export default function ClassManagement() {
             first_name: newStudentFirstName,
             last_name: newStudentLastName,
             guardian_phone: newStudentPhone || null,
+            sms_preference: newStudentSmsPreference,
             status: 'ACTIVE',
             created_at: now,
             updated_at: now,
@@ -613,6 +616,7 @@ export default function ClassManagement() {
       setNewStudentFirstName('')
       setNewStudentLastName('')
       setNewStudentPhone('')
+      setNewStudentSmsPreference(DEFAULT_SMS_PREFERENCE)
       setNewStudentClassId('')
       await loadAllStudents(schoolId)
     } catch (err) {
@@ -953,6 +957,14 @@ export default function ClassManagement() {
           <div>
             <label style={{ fontSize: 12, display: 'block' }}>Guardian phone (optional)</label>
             <input value={newStudentPhone} onChange={(e) => setNewStudentPhone(e.target.value)} placeholder="+2547XXXXXXXX" style={{ padding: 6 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, display: 'block' }}>Text the guardian</label>
+            <select value={newStudentSmsPreference} onChange={(e) => setNewStudentSmsPreference(e.target.value)} style={{ padding: 6 }}>
+              {SMS_PREFERENCES.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label style={{ fontSize: 12, display: 'block' }}>Class</label>

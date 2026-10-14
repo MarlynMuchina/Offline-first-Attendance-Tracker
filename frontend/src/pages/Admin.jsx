@@ -6,6 +6,7 @@ import { generateClient } from 'aws-amplify/api'
 import { signOut } from 'aws-amplify/auth'
 import jsPDF from 'jspdf'
 import { NETWORK_SCHOOL_ID } from '../lib/schools'
+import { db } from '../lib/db'
 import { getChronicThreshold, getTermStart, setTermStart, getExamDate, setExamDate, defaultDateRange } from '../lib/settings'
 import { countSchoolDaysBetween, projectEligibility, EXAM_ATTENDANCE_REQUIRED } from '../lib/examEligibility'
 
@@ -163,6 +164,56 @@ function computeStats(students, records, threshold) {
   return { perStudent, overallRate, chronic }
 }
 
+// Backup summary written on the device from the dashboard figures, used when
+// Claude via Bedrock can't be reached (no internet, or the AI call fails).
+// Same four headings as the Bedrock prompt so the two read alike.
+function buildDeviceSummary(stats, threshold, startDate, endDate) {
+  const pct = (r) => `${Math.round(r * 100)}%`
+  const name = (p) => `${p.student.first_name} ${p.student.last_name}`
+  const withData = stats.perStudent.filter((p) => p.rate !== null)
+  const belowExam = withData.filter((p) => p.rate < EXAM_ATTENDANCE_REQUIRED)
+  const lowest = [...withData].sort((a, b) => a.rate - b.rate).slice(0, 3)
+  const perfect = withData.filter((p) => p.absent === 0).length
+  const totalAbsences = withData.reduce((sum, p) => sum + p.absent, 0)
+
+  if (withData.length === 0) {
+    return `## Summary\nNo attendance has been marked for this class between ${startDate} and ${endDate}.`
+  }
+
+  const lines = [
+    '## Summary',
+    `Between ${startDate} and ${endDate}, the ${withData.length} students with records averaged ${pct(stats.overallRate)} attendance, with ${totalAbsences} absences in total.`,
+    '',
+    '## Key trends',
+    `- ${perfect} student${perfect === 1 ? ' was' : 's were'} never absent.`,
+    `- ${stats.chronic.length} student${stats.chronic.length === 1 ? ' is' : 's are'} below ${pct(threshold)}.`,
+    `- Lowest attendance: ${lowest.map((p) => `${name(p)} (${pct(p.rate)})`).join(', ')}.`,
+    '',
+    '## Risks',
+    belowExam.length > 0
+      ? `- ${belowExam.length} student${belowExam.length === 1 ? ' is' : 's are'} below the ${pct(EXAM_ATTENDANCE_REQUIRED)} exam line: ${belowExam.map(name).join(', ')}.`
+      : `- No student is below the ${pct(EXAM_ATTENDANCE_REQUIRED)} exam line.`,
+    '',
+    '## Recommended actions',
+    stats.chronic.length > 0
+      ? `- Contact the guardians of the ${stats.chronic.length} student${stats.chronic.length === 1 ? '' : 's'} below ${pct(threshold)}, starting with those below the exam line.`
+      : '- Keep monitoring; no follow-up is needed right now.',
+    '- Check the exam eligibility section for how many more days each student can miss.',
+  ]
+  return lines.join('\n')
+}
+
+// Offline, cloud calls can hang instead of failing, which left the
+// dashboard stuck on "Loading". Fail fast offline and give up after `ms`
+// otherwise, so the copy saved on the device can be shown instead.
+function cloudCall(promise, ms) {
+  if (!navigator.onLine) return Promise.reject(new Error('This device is offline'))
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('The server took too long to answer')), ms)),
+  ])
+}
+
 const ELIGIBILITY_ORDER = { INELIGIBLE: 0, AT_RISK: 1, ON_TRACK: 2, SECURED: 3, NO_DATA: 4 }
 
 const ELIGIBILITY_LABELS = {
@@ -199,6 +250,7 @@ const [contextError, setContextError] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [stats, setStats] = useState(null)
+  const [savedCopy, setSavedCopy] = useState(null) // { saved_at, startDate, endDate } when showing device data
 
   const [summary, setSummary] = useState(null)
   const [summaryLoading, setSummaryLoading] = useState(false)
@@ -220,19 +272,31 @@ const loadData = useCallback(async () => {
   setLoading(true)
   setError('')
   try {
-    const [students, records] = await Promise.all([
+    const [students, records] = await cloudCall(Promise.all([
       fetchAllPages(listStudentsQuery, { classId }, 'listStudents'),
       fetchAllPages(
         listAttendanceQuery,
         { classId, startDate, endDate },
         'listAttendanceRecords'
       ),
-    ])
+    ]), 20000)
     setStats(computeStats(students, records, getChronicThreshold()))
+    setSavedCopy(null)
+    db.dashboardCache
+      .put({ key: `class:${classId}`, students, records, startDate, endDate, saved_at: new Date().toISOString() })
+      .catch((err) => console.warn('Could not save dashboard data on this device:', err))
   } catch (err) {
     console.error('Failed to load dashboard data:', err)
-    const detail = err.errors?.map((e) => e.message).join('; ') || err.message || JSON.stringify(err)
-    setError(detail)
+    // Offline or the server can't be reached: show the last copy saved on
+    // this device for the class, if there is one.
+    const saved = await db.dashboardCache.get(`class:${classId}`).catch(() => null)
+    if (saved) {
+      setStats(computeStats(saved.students, saved.records, getChronicThreshold()))
+      setSavedCopy({ saved_at: saved.saved_at, startDate: saved.startDate, endDate: saved.endDate })
+    } else {
+      const detail = err.errors?.map((e) => e.message).join('; ') || err.message || JSON.stringify(err)
+      setError(detail)
+    }
   } finally {
     setLoading(false)
   }
@@ -241,17 +305,28 @@ const loadData = useCallback(async () => {
 useEffect(() => {
   async function resolveContext() {
     try {
-      const { schoolId: sid, phoneNumber } = await getCurrentUserContext()
+      const { schoolId: sid, phoneNumber } = await cloudCall(getCurrentUserContext(), 10000)
       if (sid === NETWORK_SCHOOL_ID) {
         navigate('/network', { replace: true })
         return
       }
-      const schoolClasses = await getClassesForSchool(sid)
+      const schoolClasses = await cloudCall(getClassesForSchool(sid), 10000)
       setSchoolId(sid)
       setClasses(schoolClasses)
       setClassId(schoolClasses[0].id)
+      db.dashboardCache
+        .put({ key: 'context', schoolId: sid, classes: schoolClasses })
+        .catch((err) => console.warn('Could not save class list on this device:', err))
       checkAndClaimAdminSession(sid, phoneNumber)
     } catch (err) {
+      // Offline: fall back to the school and classes saved on this device.
+      const saved = await db.dashboardCache.get('context').catch(() => null)
+      if (saved?.classes?.length) {
+        setSchoolId(saved.schoolId)
+        setClasses(saved.classes)
+        setClassId(saved.classes[0].id)
+        return
+      }
       setContextError(err.message)
       setLoading(false)
     }
@@ -299,6 +374,12 @@ useEffect(() => {
     loadData()
   }, [loadData])
 
+  // Swap a saved copy for live data as soon as the connection comes back.
+  useEffect(() => {
+    window.addEventListener('online', loadData)
+    return () => window.removeEventListener('online', loadData)
+  }, [loadData])
+
   // Summary and risk scores belong to one class and date range, so clear
   // them whenever the admin picks a different one.
   function changeView({ nextClassId = classId, nextStart = startDate, nextEnd = endDate }) {
@@ -310,22 +391,61 @@ useEffect(() => {
     setDateRange({ startDate: nextStart, endDate: nextEnd })
   }
 
+  // Show the summary last saved on this device for the class, if any, so it
+  // opens offline and without another Bedrock call. A fresh one replaces it.
+  useEffect(() => {
+    if (!classId) return
+    let cancelled = false
+    db.aiSummaries.get(classId)
+      .then((saved) => {
+        if (!cancelled && saved) setSummary((current) => current ?? saved)
+      })
+      .catch((err) => console.warn('Could not read saved AI summary:', err))
+    return () => { cancelled = true }
+  }, [classId, startDate, endDate])
+
+  // The dates the figures on screen actually cover (a saved copy may be older).
+  const shownRange = savedCopy || { startDate, endDate }
+
   async function handleGenerateSummary() {
     setSummaryLoading(true)
     setSummaryError('')
     try {
-      const res = await client.graphql({
+      // Don't leave the admin waiting on a slow AI call; after 25 seconds
+      // the device summary is shown instead.
+      const res = await cloudCall(client.graphql({
         query: generateSummaryQuery,
         variables: {
           input: { school_id: schoolId, class_id: classId, start_date: startDate, end_date: endDate },
         },
-      })
-      setSummary(res.data.generateAttendanceSummary)
+      }), 25000)
+      const fresh = {
+        ...res.data.generateAttendanceSummary,
+        class_id: classId,
+        start_date: startDate,
+        end_date: endDate,
+      }
+      setSummary(fresh)
       setSummaryExpanded(false)
+      db.aiSummaries.put(fresh).catch((err) => console.warn('Could not save AI summary on this device:', err))
     } catch (err) {
       console.error('AI summary failed:', err)
       const detail = err.errors?.map((e) => e.message).join('; ') || err.message || JSON.stringify(err)
-      setSummaryError(detail)
+      if (!stats) {
+        setSummaryError(detail)
+        return
+      }
+      // Fall back to a summary written on the device so the admin always
+      // gets one. The last Claude summary stays saved and comes back on reload.
+      setSummary({
+        source: 'device',
+        summary: buildDeviceSummary(stats, getChronicThreshold(), shownRange.startDate, shownRange.endDate),
+        generated_at: new Date().toISOString(),
+        class_id: classId,
+        start_date: shownRange.startDate,
+        end_date: shownRange.endDate,
+      })
+      setSummaryExpanded(false)
     } finally {
       setSummaryLoading(false)
     }
@@ -526,6 +646,15 @@ useEffect(() => {
           {signOutButton}
         </div>
       </div>
+      {savedCopy && (
+        <div style={{
+          marginBottom: 16, padding: '10px 14px', border: '1px solid #c80',
+          borderRadius: 6, background: '#fff8ec', fontSize: 13, color: '#8a5a00',
+        }}>
+          Offline: showing the copy saved on this device on {new Date(savedCopy.saved_at).toLocaleString()},
+          covering {savedCopy.startDate} to {savedCopy.endDate}. It refreshes when you're back online.
+        </div>
+      )}
       {adminWarning && (
         <div style={{
           marginBottom: 16, padding: '10px 14px', border: '1px solid #c80',
@@ -600,14 +729,25 @@ useEffect(() => {
               >
                 <ReactMarkdown>{summary.summary}</ReactMarkdown>
               </div>
-              <p className="subtext" style={{ fontSize: 10 }}>
-                Generated at {new Date(summary.generated_at).toLocaleString()}
-              </p>
+              {summary.source === 'device' ? (
+                <p className="subtext" style={{ fontSize: 10 }}>
+                  Claude via Bedrock couldn't be reached, so this summary was written on this device from the
+                  attendance figures. Click Regenerate when you're online for the AI version.
+                </p>
+              ) : (
+                <p className="subtext" style={{ fontSize: 10 }}>
+                  Generated at {new Date(summary.generated_at).toLocaleString()}, saved on this device
+                  {summary.start_date && (summary.start_date !== startDate || summary.end_date !== endDate) &&
+                    `. Covers ${summary.start_date} to ${summary.end_date}; regenerate for the dates above.`}
+                </p>
+              )}
               <div className="button-group">
                 <button onClick={() => setSummaryExpanded((v) => !v)} className="btn btn-small">
                   {summaryExpanded ? 'Show less' : 'Read full summary'}
                 </button>
-                <button onClick={handleGenerateSummary} className="btn btn-small">Regenerate</button>
+                <button onClick={handleGenerateSummary} disabled={summaryLoading} className="btn btn-small">
+                  {summaryLoading ? 'Generating…' : 'Regenerate'}
+                </button>
               </div>
             </>
           )}
