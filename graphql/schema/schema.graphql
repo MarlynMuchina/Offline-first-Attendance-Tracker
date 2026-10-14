@@ -116,6 +116,36 @@ type Mutation {
     @function(name: "createTeacherAccountFunction")
     @auth(rules: [{ allow: groups, groups: ["Admin", "HeadTeacher"] }])
 
+    # Angaza only; the Lambda checks the caller's school is ANGAZA.
+    manageSchoolAdmins(input: ManageSchoolAdminsInput!): ManageSchoolAdminsResult
+    @function(name: "manageSchoolAdminsFunction")
+    @auth(rules: [{ allow: groups, groups: ["Admin"] }])
+
+}
+
+input ManageSchoolAdminsInput {
+  action: String!            # LIST | CREATE | DISABLE | ENABLE | RESET_PASSWORD
+  school_id: ID
+  first_name: String
+  last_name: String
+  phone_number: AWSPhone
+  username: String
+}
+
+type SchoolAdmin {
+  username: String!
+  phone_number: String
+  name: String
+  school_id: ID!
+  enabled: Boolean!
+  status: String
+  created_at: AWSDateTime
+}
+
+type ManageSchoolAdminsResult {
+  admins: [SchoolAdmin!]
+  admin: SchoolAdmin
+  temporary_password: String
 }
 
 input GenerateAttendanceSummaryInput {
