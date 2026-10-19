@@ -150,6 +150,34 @@ createTeacherAccountFn.addToRolePolicy(new iam.PolicyStatement({
   resources: [props.userPool.userPoolArn],
 }));
 
+// ---- manageSchoolAdmins function ----
+// Angaza staff create, disable and reset the admin login of each school.
+// The Lambda itself refuses any caller whose school isn't ANGAZA.
+const manageSchoolAdminsFn = new lambda.Function(this, 'ManageSchoolAdminsFunction', {
+  functionName: 'manageSchoolAdminsFunction',
+  runtime: lambda.Runtime.NODEJS_18_X,
+  handler: 'index.handler',
+  timeout: cdk.Duration.seconds(15),
+  code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/manageSchoolAdmins')),
+  environment: {
+    USER_POOL_ID: props.userPool.userPoolId,
+  },
+});
+
+manageSchoolAdminsFn.addToRolePolicy(new iam.PolicyStatement({
+  actions: [
+    'cognito-idp:ListUsersInGroup',
+    'cognito-idp:AdminCreateUser',
+    'cognito-idp:AdminAddUserToGroup',
+    'cognito-idp:AdminGetUser',
+    'cognito-idp:AdminListGroupsForUser',
+    'cognito-idp:AdminDisableUser',
+    'cognito-idp:AdminEnableUser',
+    'cognito-idp:AdminSetUserPassword',
+  ],
+  resources: [props.userPool.userPoolArn],
+}));
+
 const atSecret = secretsmanager.Secret.fromSecretNameV2(
   this, 'AfricasTalkingSecret', 'csg-africastalking-credentials'
 );
@@ -289,6 +317,7 @@ predictAttendanceRiskFn.addToRolePolicy(new iam.PolicyStatement({
          sendSmsFunction: sendSmsFn,
          predictAttendanceRiskFunction: predictAttendanceRiskFn,
          createTeacherAccountFunction: createTeacherAccountFn,
+         manageSchoolAdminsFunction: manageSchoolAdminsFn,
       },
     });
 
