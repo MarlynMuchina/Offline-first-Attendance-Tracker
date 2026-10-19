@@ -71,10 +71,13 @@ export class ApiStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/markAttendance')),
       environment: {
         TABLE_NAME: attendanceTable.tableName,
+        STUDENT_TABLE: studentTable.tableName,
+        USER_POOL_ID: props.userPool.userPoolId,
       },
     });
 
     attendanceTable.grantReadWriteData(markAttendanceFn);
+    studentTable.grantReadData(markAttendanceFn);
     markAttendanceFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['dynamodb:Query'],
       resources: [`${attendanceTable.tableArn}/index/*`],
@@ -108,6 +111,7 @@ export class ApiStack extends cdk.Stack {
       environment: {
         ATTENDANCE_TABLE: attendanceTable.tableName,
         STUDENT_TABLE: studentTable.tableName,
+        USER_POOL_ID: props.userPool.userPoolId,
       },
     });
 
@@ -146,6 +150,7 @@ createTeacherAccountFn.addToRolePolicy(new iam.PolicyStatement({
   actions: [
     'cognito-idp:AdminCreateUser',
     'cognito-idp:AdminAddUserToGroup',
+    'cognito-idp:AdminGetUser',
   ],
   resources: [props.userPool.userPoolArn],
 }));
@@ -191,11 +196,14 @@ const sendSmsFn = new lambda.Function(this, 'SendSmsAlertFunction', {
   environment: {
     NOTIFICATION_TABLE: notificationTable.tableName,
     AT_SECRET_NAME: 'csg-africastalking-credentials',
+    STUDENT_TABLE: studentTable.tableName,
+    USER_POOL_ID: props.userPool.userPoolId,
     NODE_OPTIONS: '--tls-min-v1.0', // Node 18's OpenSSL 3.x defaults reject Africa's Talking sandbox's TLS handshake — see issue #34
   },
 });
 
 notificationTable.grantWriteData(sendSmsFn);
+studentTable.grantReadData(sendSmsFn);
 atSecret.grantRead(sendSmsFn);
 
 // ---- checkThreshold function (issue #35, Phase C) ----
@@ -260,6 +268,7 @@ const predictAttendanceRiskFn = new lambda.Function(this, 'PredictAttendanceRisk
   code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/predictAttendanceRisk')),
   environment: {
     ATTENDANCE_TABLE: attendanceTable.tableName,
+    USER_POOL_ID: props.userPool.userPoolId,
   },
 });
 
@@ -301,6 +310,15 @@ predictAttendanceRiskFn.addToRolePolicy(new iam.PolicyStatement({
   ],
   resources: ['*'], // AWS requires '*' for these specific Marketplace actions — scoping to an ARN isn't supported
 }));
+
+    // Each of these checks the caller's school against the request, which
+    // means reading the caller's custom:school_id from Cognito.
+    for (const fn of [markAttendanceFn, attendanceSummaryFn, sendSmsFn, predictAttendanceRiskFn]) {
+      fn.addToRolePolicy(new iam.PolicyStatement({
+        actions: ['cognito-idp:AdminGetUser'],
+        resources: [props.userPool.userPoolArn],
+      }));
+    }
 
     // ---- GraphQL API ----
     this.api = new AmplifyGraphqlApi(this, 'AttendanceApi', {

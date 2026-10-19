@@ -1,21 +1,54 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, QueryCommand } = require('@aws-sdk/lib-dynamodb');
 const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
+const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
 
 const client = new DynamoDBClient({});
 const doc = DynamoDBDocumentClient.from(client);
 const bedrock = new BedrockRuntimeClient({});
+const cognito = new CognitoIdentityProviderClient({});
 
 const ATTENDANCE_TABLE = process.env.ATTENDANCE_TABLE;
 const STUDENT_TABLE = process.env.STUDENT_TABLE;
+const USER_POOL_ID = process.env.USER_POOL_ID;
 // Claude Haiku 4.5 via the EU cross-region inference profile -- confirmed
 // via `aws bedrock list-inference-profiles`, since this account's Bedrock
 // models require inference profiles rather than direct on-demand invocation.
 // EU-scoped (not Global) to keep inference traffic within Europe.
 const MODEL_ID = 'eu.anthropic.claude-haiku-4-5-20251001-v1:0';
 
+// AppSync signs calls with the access token, which carries the groups but
+// not custom:school_id, so the caller's school is read from Cognito. It
+// never changes, so it's kept while the Lambda stays warm. The school in a
+// request is never trusted on its own (CSG Vol 2, sec 2.5).
+const callerSchools = new Map();
+
+async function getCallerSchool(identity) {
+  const fromToken = identity?.claims?.['custom:school_id'];
+  if (fromToken) return fromToken;
+  const username = identity?.username;
+  if (!username) throw new Error('Not signed in.');
+  if (!callerSchools.has(username)) {
+    const lookup = cognito
+      .send(new AdminGetUserCommand({ UserPoolId: USER_POOL_ID, Username: username }))
+      .then((user) => (user.UserAttributes || []).find((a) => a.Name === 'custom:school_id')?.Value || null);
+    callerSchools.set(username, lookup);
+    lookup.catch(() => callerSchools.delete(username));
+  }
+  const schoolId = await callerSchools.get(username);
+  if (!schoolId) throw new Error('This account has no school.');
+  return schoolId;
+}
+
+async function assertCallerSchool(identity, schoolId) {
+  if ((await getCallerSchool(identity)) !== schoolId) {
+    throw new Error("You can only work with your own school's data.");
+  }
+}
+
 exports.handler = async (event) => {
   const { school_id, class_id, start_date, end_date } = event.arguments.input;
+  await assertCallerSchool(event.identity, school_id);
 
   // 1. Pull the class roster (for names, not raw PII beyond what's needed)
   const students = await doc.send(new QueryCommand({
@@ -38,7 +71,9 @@ exports.handler = async (event) => {
   // standard ("no heavy reporting workloads query raw data directly", and
   // "prompts must avoid exposing sensitive data unnecessarily").
   const statsByStudent = {};
+  // Only this school's students, so another school's class id gives nothing away.
   for (const s of students.Items || []) {
+    if (s.school_id !== school_id) continue;
     statsByStudent[s.id] = { name: `${s.first_name} ${s.last_name}`, present: 0, absent: 0, late: 0, total: 0 };
   }
   for (const r of records.Items || []) {

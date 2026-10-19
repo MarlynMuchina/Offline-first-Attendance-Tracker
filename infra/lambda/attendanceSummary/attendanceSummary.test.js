@@ -14,7 +14,8 @@
  *    and request shape
  *  - response parsing extracts summary text correctly
  *  - documents (rather than "fixes") two things worth knowing:
- *      1. school_id is accepted as input but never used in either query
+ *      1. school_id isn't part of either query; it is checked against the
+ *         caller's school and used to drop other schools' students after
  *      2. a Bedrock failure propagates as a rejected promise with no
  *         local try/catch -- intentional or not, this test makes that
  *         behavior explicit rather than letting it be an unexamined gap
@@ -24,6 +25,7 @@
 
 const mockDocSend = jest.fn();
 const mockBedrockSend = jest.fn();
+const mockCognitoSend = jest.fn();
 
 jest.mock('@aws-sdk/client-dynamodb', () => ({
   DynamoDBClient: jest.fn().mockImplementation(() => ({})),
@@ -39,6 +41,11 @@ jest.mock('@aws-sdk/client-bedrock-runtime', () => ({
   InvokeModelCommand: jest.fn((params) => ({ __type: 'InvokeModelCommand', ...params })),
 }));
 
+jest.mock('@aws-sdk/client-cognito-identity-provider', () => ({
+  CognitoIdentityProviderClient: jest.fn().mockImplementation(() => ({ send: mockCognitoSend })),
+  AdminGetUserCommand: jest.fn((params) => ({ __type: 'AdminGetUserCommand', ...params })),
+}));
+
 process.env.ATTENDANCE_TABLE = 'AttendanceRecord-test-NONE';
 process.env.STUDENT_TABLE = 'Student-test-NONE';
 
@@ -50,9 +57,9 @@ function bedrockResponseFor(text) {
 }
 
 const STUDENTS = [
-  { id: 'S001', first_name: 'Amina', last_name: 'Otieno' },
-  { id: 'S002', first_name: 'Brian', last_name: 'Kiptoo' },
-  { id: 'S003', first_name: 'Cynthia', last_name: 'Wanjiru' }, // no records in range
+  { id: 'S001', school_id: 'SCH01', first_name: 'Amina', last_name: 'Otieno' },
+  { id: 'S002', school_id: 'SCH01', first_name: 'Brian', last_name: 'Kiptoo' },
+  { id: 'S003', school_id: 'SCH01', first_name: 'Cynthia', last_name: 'Wanjiru' }, // no records in range
 ];
 
 const RECORDS = [
@@ -68,6 +75,8 @@ const RECORDS = [
   { student_id: 'S002', status: 'LATE', date: '2026-06-10' },
   // S003: no records at all
 ];
+
+const SCH01_CALLER = { claims: { 'custom:school_id': 'SCH01' } };
 
 const VALID_INPUT = {
   school_id: 'SCH01',
@@ -88,7 +97,7 @@ describe('attendanceSummary handler', () => {
       .mockResolvedValueOnce({ Items: RECORDS });
     mockBedrockSend.mockResolvedValue(bedrockResponseFor('summary text'));
 
-    await handler({ arguments: { input: VALID_INPUT } });
+    await handler({ arguments: { input: VALID_INPUT }, identity: SCH01_CALLER });
 
     const studentQuery = mockDocSend.mock.calls[0][0];
     expect(studentQuery.TableName).toBe('Student-test-NONE');
@@ -102,7 +111,7 @@ describe('attendanceSummary handler', () => {
       .mockResolvedValueOnce({ Items: RECORDS });
     mockBedrockSend.mockResolvedValue(bedrockResponseFor('summary text'));
 
-    await handler({ arguments: { input: VALID_INPUT } });
+    await handler({ arguments: { input: VALID_INPUT }, identity: SCH01_CALLER });
 
     const recordQuery = mockDocSend.mock.calls[1][0];
     expect(recordQuery.TableName).toBe('AttendanceRecord-test-NONE');
@@ -115,13 +124,13 @@ describe('attendanceSummary handler', () => {
     expect(recordQuery.ExpressionAttributeValues[':end']).toBe('2026-06-10');
   });
 
-  test('school_id is accepted as input but not used in either query (documented, not asserted as correct or incorrect)', async () => {
+  test('both queries are by class only; school_id is applied after them', async () => {
     mockDocSend
       .mockResolvedValueOnce({ Items: STUDENTS })
       .mockResolvedValueOnce({ Items: RECORDS });
     mockBedrockSend.mockResolvedValue(bedrockResponseFor('summary text'));
 
-    await handler({ arguments: { input: VALID_INPUT } });
+    await handler({ arguments: { input: VALID_INPUT }, identity: SCH01_CALLER });
 
     const studentQuery = mockDocSend.mock.calls[0][0];
     const recordQuery = mockDocSend.mock.calls[1][0];
@@ -135,7 +144,7 @@ describe('attendanceSummary handler', () => {
       .mockResolvedValueOnce({ Items: RECORDS });
     mockBedrockSend.mockResolvedValue(bedrockResponseFor('summary text'));
 
-    await handler({ arguments: { input: VALID_INPUT } });
+    await handler({ arguments: { input: VALID_INPUT }, identity: SCH01_CALLER });
 
     const promptSent = mockBedrockSend.mock.calls[0][0].body;
     const parsedBody = JSON.parse(promptSent);
@@ -151,7 +160,7 @@ describe('attendanceSummary handler', () => {
       .mockResolvedValueOnce({ Items: RECORDS }); // S003 has no matching records
     mockBedrockSend.mockResolvedValue(bedrockResponseFor('summary text'));
 
-    await handler({ arguments: { input: VALID_INPUT } });
+    await handler({ arguments: { input: VALID_INPUT }, identity: SCH01_CALLER });
 
     const promptText = JSON.parse(mockBedrockSend.mock.calls[0][0].body).messages[0].content;
     expect(promptText).toContain('"name": "Cynthia Wanjiru"');
@@ -164,7 +173,7 @@ describe('attendanceSummary handler', () => {
       .mockResolvedValueOnce({ Items: RECORDS });
     mockBedrockSend.mockResolvedValue(bedrockResponseFor('summary text'));
 
-    await handler({ arguments: { input: VALID_INPUT } });
+    await handler({ arguments: { input: VALID_INPUT }, identity: SCH01_CALLER });
 
     const promptText = JSON.parse(mockBedrockSend.mock.calls[0][0].body).messages[0].content;
     expect(promptText).toContain('Students below 70% attendance: [{"name":"Brian Kiptoo"');
@@ -180,7 +189,7 @@ describe('attendanceSummary handler', () => {
       .mockResolvedValueOnce({ Items: allGoodRecords });
     mockBedrockSend.mockResolvedValue(bedrockResponseFor('summary text'));
 
-    await handler({ arguments: { input: VALID_INPUT } });
+    await handler({ arguments: { input: VALID_INPUT }, identity: SCH01_CALLER });
 
     const promptText = JSON.parse(mockBedrockSend.mock.calls[0][0].body).messages[0].content;
     expect(promptText).toContain('Students below 70% attendance: none');
@@ -192,7 +201,7 @@ describe('attendanceSummary handler', () => {
       .mockResolvedValueOnce({ Items: RECORDS });
     mockBedrockSend.mockResolvedValue(bedrockResponseFor('summary text'));
 
-    await handler({ arguments: { input: VALID_INPUT } });
+    await handler({ arguments: { input: VALID_INPUT }, identity: SCH01_CALLER });
 
     const bedrockCall = mockBedrockSend.mock.calls[0][0];
     expect(bedrockCall.modelId).toBe('eu.anthropic.claude-haiku-4-5-20251001-v1:0');
@@ -210,7 +219,7 @@ describe('attendanceSummary handler', () => {
       .mockResolvedValueOnce({ Items: RECORDS });
     mockBedrockSend.mockResolvedValue(bedrockResponseFor('This class is doing well overall.'));
 
-    const result = await handler({ arguments: { input: VALID_INPUT } });
+    const result = await handler({ arguments: { input: VALID_INPUT }, identity: SCH01_CALLER });
 
     expect(result.summary).toBe('This class is doing well overall.');
     expect(new Date(result.generated_at).toString()).not.toBe('Invalid Date');
@@ -222,7 +231,7 @@ describe('attendanceSummary handler', () => {
       .mockResolvedValueOnce({ Items: RECORDS });
     mockBedrockSend.mockRejectedValue(new Error('AccessDeniedException: not subscribed to this model'));
 
-    await expect(handler({ arguments: { input: VALID_INPUT } })).rejects.toThrow(
+    await expect(handler({ arguments: { input: VALID_INPUT }, identity: SCH01_CALLER })).rejects.toThrow(
       'AccessDeniedException'
     );
   });
@@ -233,7 +242,7 @@ describe('attendanceSummary handler', () => {
       .mockResolvedValueOnce({ Items: [] });
     mockBedrockSend.mockResolvedValue(bedrockResponseFor('No students in this class.'));
 
-    const result = await handler({ arguments: { input: VALID_INPUT } });
+    const result = await handler({ arguments: { input: VALID_INPUT }, identity: SCH01_CALLER });
     expect(result.summary).toBe('No students in this class.');
   });
 
@@ -243,8 +252,35 @@ describe('attendanceSummary handler', () => {
       .mockResolvedValueOnce({}); // no Items key
     mockBedrockSend.mockResolvedValue(bedrockResponseFor('summary text'));
 
-    await expect(handler({ arguments: { input: VALID_INPUT } })).resolves.toMatchObject({
+    await expect(handler({ arguments: { input: VALID_INPUT }, identity: SCH01_CALLER })).resolves.toMatchObject({
       summary: 'summary text',
     });
+  });
+});
+
+describe('school checks', () => {
+  beforeEach(() => {
+    mockDocSend.mockReset();
+    mockBedrockSend.mockReset();
+    mockCognitoSend.mockReset();
+  });
+
+  test('refuses a caller from another school before reading any data', async () => {
+    await expect(handler({ arguments: { input: VALID_INPUT }, identity: { claims: { 'custom:school_id': 'SCH02' } } }))
+      .rejects.toThrow("You can only work with your own school's data.");
+    expect(mockDocSend).not.toHaveBeenCalled();
+    expect(mockBedrockSend).not.toHaveBeenCalled();
+  });
+
+  test("leaves out students who aren't in the caller's school", async () => {
+    mockDocSend
+      .mockResolvedValueOnce({ Items: [...STUDENTS, { id: 'X001', school_id: 'SCH02', first_name: 'Other', last_name: 'School' }] })
+      .mockResolvedValueOnce({ Items: [...RECORDS, { student_id: 'X001', status: 'ABSENT', date: '2026-06-01' }] });
+    mockBedrockSend.mockResolvedValue(bedrockResponseFor('ok'));
+
+    await handler({ arguments: { input: VALID_INPUT }, identity: SCH01_CALLER });
+
+    const body = JSON.parse(mockBedrockSend.mock.calls[0][0].body);
+    expect(body.messages[0].content).not.toContain('Other School');
   });
 });

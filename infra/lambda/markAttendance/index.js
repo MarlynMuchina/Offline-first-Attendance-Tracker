@@ -1,14 +1,47 @@
 const crypto = require('crypto');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, QueryCommand, PutCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, QueryCommand, GetCommand, PutCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
+const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
 const { EventBridgeClient, PutEventsCommand } = require('@aws-sdk/client-eventbridge');
 
 const client = new DynamoDBClient({});
 const doc = DynamoDBDocumentClient.from(client);
 const eventBridge = new EventBridgeClient({});
+const cognito = new CognitoIdentityProviderClient({});
 
 const TABLE_NAME = process.env.TABLE_NAME;
+const STUDENT_TABLE = process.env.STUDENT_TABLE;
+const USER_POOL_ID = process.env.USER_POOL_ID;
 const VALID_STATUSES = ['PRESENT', 'ABSENT', 'LATE'];
+
+// AppSync signs calls with the access token, which carries the groups but
+// not custom:school_id, so the caller's school is read from Cognito. It
+// never changes, so it's kept while the Lambda stays warm. The school in a
+// request is never trusted on its own (CSG Vol 2, sec 2.5).
+const callerSchools = new Map();
+
+async function getCallerSchool(identity) {
+  const fromToken = identity?.claims?.['custom:school_id'];
+  if (fromToken) return fromToken;
+  const username = identity?.username;
+  if (!username) throw new Error('Not signed in.');
+  if (!callerSchools.has(username)) {
+    const lookup = cognito
+      .send(new AdminGetUserCommand({ UserPoolId: USER_POOL_ID, Username: username }))
+      .then((user) => (user.UserAttributes || []).find((a) => a.Name === 'custom:school_id')?.Value || null);
+    callerSchools.set(username, lookup);
+    lookup.catch(() => callerSchools.delete(username));
+  }
+  const schoolId = await callerSchools.get(username);
+  if (!schoolId) throw new Error('This account has no school.');
+  return schoolId;
+}
+
+async function assertCallerSchool(identity, schoolId) {
+  if ((await getCallerSchool(identity)) !== schoolId) {
+    throw new Error("You can only work with your own school's data.");
+  }
+}
 
 async function emitAuditEvent(action, input, recordId) {
   try {
@@ -45,6 +78,14 @@ exports.handler = async (event) => {
   }
   if (!input.school_id || !input.student_id || !input.class_id || !input.date) {
     throw new Error('Missing required field: school_id, student_id, class_id, and date are all required');
+  }
+
+  // The caller must belong to the school, and so must the student, or a
+  // record could be filed under one school for another school's student.
+  await assertCallerSchool(event.identity, input.school_id);
+  const student = await doc.send(new GetCommand({ TableName: STUDENT_TABLE, Key: { id: input.student_id } }));
+  if (student.Item?.school_id !== input.school_id) {
+    throw new Error('This student is not in your school.');
   }
 
   // Look up an existing record for this student/class/date (the natural key)

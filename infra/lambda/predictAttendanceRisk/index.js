@@ -23,13 +23,39 @@
  */
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, QueryCommand } = require('@aws-sdk/lib-dynamodb');
+const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
 
 const model = require('./model_coefficients.json');
 
 const client = new DynamoDBClient({});
 const doc = DynamoDBDocumentClient.from(client);
+const cognito = new CognitoIdentityProviderClient({});
 
 const ATTENDANCE_TABLE = process.env.ATTENDANCE_TABLE;
+const USER_POOL_ID = process.env.USER_POOL_ID;
+
+// AppSync signs calls with the access token, which carries the groups but
+// not custom:school_id, so the caller's school is read from Cognito. It
+// never changes, so it's kept while the Lambda stays warm. The school in a
+// request is never trusted on its own (CSG Vol 2, sec 2.5).
+const callerSchools = new Map();
+
+async function getCallerSchool(identity) {
+  const fromToken = identity?.claims?.['custom:school_id'];
+  if (fromToken) return fromToken;
+  const username = identity?.username;
+  if (!username) throw new Error('Not signed in.');
+  if (!callerSchools.has(username)) {
+    const lookup = cognito
+      .send(new AdminGetUserCommand({ UserPoolId: USER_POOL_ID, Username: username }))
+      .then((user) => (user.UserAttributes || []).find((a) => a.Name === 'custom:school_id')?.Value || null);
+    callerSchools.set(username, lookup);
+    lookup.catch(() => callerSchools.delete(username));
+  }
+  const schoolId = await callerSchools.get(username);
+  if (!schoolId) throw new Error('This account has no school.');
+  return schoolId;
+}
 
 // NOTE: checks UPPERCASE values because this Lambda reads from DynamoDB,
 // where markAttendance enforces uppercase status at write time. The
@@ -128,6 +154,15 @@ exports.handler = async (event) => {
   }));
 
   const records = (res.Items || []).sort((a, b) => a.date.localeCompare(b.date));
+
+  // Calls through the API may only score their own school's students.
+  // A direct invoke (no event.arguments) has no caller to check.
+  if (event.arguments) {
+    const callerSchool = await getCallerSchool(event.identity);
+    if (records.some((r) => r.school_id !== callerSchool)) {
+      throw new Error('This student is not in your school.');
+    }
+  }
   const features = computeFeatures(records);
 
   if (!features) {

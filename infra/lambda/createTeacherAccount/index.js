@@ -35,6 +35,7 @@ const {
   CognitoIdentityProviderClient,
   AdminCreateUserCommand,
   AdminAddUserToGroupCommand,
+  AdminGetUserCommand,
 } = require('@aws-sdk/client-cognito-identity-provider');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
@@ -45,6 +46,35 @@ const doc = DynamoDBDocumentClient.from(ddbClient);
 
 const USER_POOL_ID = process.env.USER_POOL_ID;
 const TEACHER_TABLE = process.env.TEACHER_TABLE;
+
+// AppSync signs calls with the access token, which carries the groups but
+// not custom:school_id, so the caller's school is read from Cognito. It
+// never changes, so it's kept while the Lambda stays warm. The school in a
+// request is never trusted on its own (CSG Vol 2, sec 2.5).
+const callerSchools = new Map();
+
+async function getCallerSchool(identity) {
+  const fromToken = identity?.claims?.['custom:school_id'];
+  if (fromToken) return fromToken;
+  const username = identity?.username;
+  if (!username) throw new Error('Not signed in.');
+  if (!callerSchools.has(username)) {
+    const lookup = cognito
+      .send(new AdminGetUserCommand({ UserPoolId: USER_POOL_ID, Username: username }))
+      .then((user) => (user.UserAttributes || []).find((a) => a.Name === 'custom:school_id')?.Value || null);
+    callerSchools.set(username, lookup);
+    lookup.catch(() => callerSchools.delete(username));
+  }
+  const schoolId = await callerSchools.get(username);
+  if (!schoolId) throw new Error('This account has no school.');
+  return schoolId;
+}
+
+async function assertCallerSchool(identity, schoolId) {
+  if ((await getCallerSchool(identity)) !== schoolId) {
+    throw new Error("You can only work with your own school's data.");
+  }
+}
 
 /**
  * Generates a password satisfying this pool's policy (auth_stack.ts):
@@ -75,6 +105,8 @@ exports.handler = async (event) => {
   if (!school_id || !first_name || !last_name || !phone_number) {
     throw new Error('school_id, first_name, last_name, and phone_number are all required');
   }
+  // An admin can only add teachers to their own school.
+  await assertCallerSchool(event.identity, school_id);
 
   const tempPassword = generateTempPassword();
 

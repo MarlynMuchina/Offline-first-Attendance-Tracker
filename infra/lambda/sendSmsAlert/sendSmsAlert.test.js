@@ -23,6 +23,7 @@
 const mockDocSend = jest.fn();
 const mockSecretsSend = jest.fn();
 const mockAtSmsSend = jest.fn();
+const mockCognitoSend = jest.fn();
 
 jest.mock('@aws-sdk/client-secrets-manager', () => ({
   SecretsManagerClient: jest.fn().mockImplementation(() => ({ send: mockSecretsSend })),
@@ -37,7 +38,13 @@ jest.mock('@aws-sdk/lib-dynamodb', () => ({
   DynamoDBDocumentClient: {
     from: jest.fn(() => ({ send: mockDocSend })),
   },
+  GetCommand: jest.fn((params) => params),
   PutCommand: jest.fn((params) => params),
+}));
+
+jest.mock('@aws-sdk/client-cognito-identity-provider', () => ({
+  CognitoIdentityProviderClient: jest.fn().mockImplementation(() => ({ send: mockCognitoSend })),
+  AdminGetUserCommand: jest.fn((params) => ({ __type: 'AdminGetUserCommand', ...params })),
 }));
 
 // africastalking is required lazily inside the handler (require('africastalking')(...)),
@@ -67,7 +74,12 @@ function freshHandler() {
   }));
   jest.doMock('@aws-sdk/lib-dynamodb', () => ({
     DynamoDBDocumentClient: { from: jest.fn(() => ({ send: mockDocSend })) },
+    GetCommand: jest.fn((params) => params),
     PutCommand: jest.fn((params) => params),
+  }));
+  jest.doMock('@aws-sdk/client-cognito-identity-provider', () => ({
+    CognitoIdentityProviderClient: jest.fn().mockImplementation(() => ({ send: mockCognitoSend })),
+    AdminGetUserCommand: jest.fn((params) => params),
   }));
   jest.doMock('africastalking', () => jest.fn(() => ({ SMS: { send: mockAtSmsSend } })));
   return require('./index').handler;
@@ -77,6 +89,7 @@ beforeEach(() => {
   mockDocSend.mockReset();
   mockSecretsSend.mockReset();
   mockAtSmsSend.mockReset();
+  mockCognitoSend.mockReset();
 });
 
 const VALID_INPUT = {
@@ -85,6 +98,9 @@ const VALID_INPUT = {
   guardian_phone: '+254721384842',
   message: 'Test alert message',
 };
+
+const SCH01_CALLER = { claims: { 'custom:school_id': 'SCH01' } };
+const STUDENT_ON_FILE = { id: 'SCH01-S001', school_id: 'SCH01', guardian_phone: '+254721384842' };
 
 const VALID_SECRET = {
   SecretString: JSON.stringify({ apiKey: 'atsk_testkey', username: 'sandbox' }),
@@ -103,9 +119,9 @@ describe('sendSmsAlert handler', () => {
     const handler = freshHandler();
     mockSecretsSend.mockResolvedValue(VALID_SECRET);
     mockAtSmsSend.mockResolvedValue(AT_SUCCESS_RESPONSE);
-    mockDocSend.mockResolvedValue({});
+    mockDocSend.mockImplementation(async (params) => (params.Key ? { Item: STUDENT_ON_FILE } : {}));
 
-    const viaAppSync = await handler({ arguments: { input: VALID_INPUT } });
+    const viaAppSync = await handler({ arguments: { input: VALID_INPUT }, identity: SCH01_CALLER });
     expect(viaAppSync.success).toBe(true);
 
     const viaDirectInvoke = await handler(VALID_INPUT);
@@ -118,7 +134,7 @@ describe('sendSmsAlert handler', () => {
     mockAtSmsSend.mockResolvedValue(AT_SUCCESS_RESPONSE);
     mockDocSend.mockResolvedValue({});
 
-    const result = await handler({ arguments: { input: VALID_INPUT } });
+    const result = await handler(VALID_INPUT);
 
     expect(result.success).toBe(true);
     expect(result.status).toBe('SENT');
@@ -131,7 +147,7 @@ describe('sendSmsAlert handler', () => {
     mockAtSmsSend.mockResolvedValue(AT_FAILURE_RESPONSE);
     mockDocSend.mockResolvedValue({});
 
-    const result = await handler({ arguments: { input: VALID_INPUT } });
+    const result = await handler(VALID_INPUT);
 
     expect(result.success).toBe(false);
     expect(result.status).toBe('FAILED');
@@ -145,7 +161,7 @@ describe('sendSmsAlert handler', () => {
 
     // Regression guard for tonight's actual incident: a 401 from AT must
     // resolve to a FAILED response, not an unhandled Lambda crash.
-    await expect(handler({ arguments: { input: VALID_INPUT } })).resolves.toMatchObject({
+    await expect(handler(VALID_INPUT)).resolves.toMatchObject({
       success: false,
       status: 'FAILED',
     });
@@ -157,7 +173,7 @@ describe('sendSmsAlert handler', () => {
     mockAtSmsSend.mockResolvedValue(AT_SUCCESS_RESPONSE);
     mockDocSend.mockResolvedValue({});
 
-    await handler({ arguments: { input: VALID_INPUT } });
+    await handler(VALID_INPUT);
 
     expect(mockDocSend).toHaveBeenCalledTimes(1);
     const putCall = mockDocSend.mock.calls[0][0];
@@ -173,7 +189,7 @@ describe('sendSmsAlert handler', () => {
     mockAtSmsSend.mockRejectedValue(new Error('network error'));
     mockDocSend.mockResolvedValue({});
 
-    await handler({ arguments: { input: VALID_INPUT } });
+    await handler(VALID_INPUT);
 
     expect(mockDocSend).toHaveBeenCalledTimes(1);
     expect(mockDocSend.mock.calls[0][0].Item.status).toBe('FAILED');
@@ -185,9 +201,9 @@ describe('sendSmsAlert handler', () => {
     mockAtSmsSend.mockResolvedValue(AT_SUCCESS_RESPONSE);
     mockDocSend.mockResolvedValue({});
 
-    await handler({ arguments: { input: VALID_INPUT } });
-    await handler({ arguments: { input: VALID_INPUT } });
-    await handler({ arguments: { input: VALID_INPUT } });
+    await handler(VALID_INPUT);
+    await handler(VALID_INPUT);
+    await handler(VALID_INPUT);
 
     // This is the exact behavior that caused tonight's stale-credential
     // confusion during key rotation -- caching is intentional for warm-start
@@ -205,7 +221,7 @@ describe('sendSmsAlert handler', () => {
     mockDocSend.mockResolvedValue({});
 
     const customInput = { ...VALID_INPUT, guardian_phone: '+254799999999' };
-    await handler({ arguments: { input: customInput } });
+    await handler(customInput);
 
     const sendCallArgs = mockAtSmsSend.mock.calls[0][0];
     expect(sendCallArgs.to).toEqual(['+254799999999']);
@@ -217,9 +233,47 @@ describe('sendSmsAlert handler', () => {
     mockAtSmsSend.mockResolvedValue(AT_SUCCESS_RESPONSE);
     mockDocSend.mockResolvedValue({});
 
-    const r1 = await handler({ arguments: { input: VALID_INPUT } });
-    const r2 = await handler({ arguments: { input: VALID_INPUT } });
+    const r1 = await handler(VALID_INPUT);
+    const r2 = await handler(VALID_INPUT);
 
     expect(r1.notification_id).not.toBe(r2.notification_id);
+  });
+
+  describe('calls through the API', () => {
+    function apiCall(input, identity = SCH01_CALLER) {
+      return freshHandler()({ arguments: { input }, identity });
+    }
+
+    beforeEach(() => {
+      mockSecretsSend.mockResolvedValue(VALID_SECRET);
+      mockAtSmsSend.mockResolvedValue(AT_SUCCESS_RESPONSE);
+      mockDocSend.mockImplementation(async (params) => (params.Key ? { Item: STUDENT_ON_FILE } : {}));
+    });
+
+    test('refuses a caller from another school', async () => {
+      await expect(apiCall(VALID_INPUT, { claims: { 'custom:school_id': 'SCH02' } }))
+        .rejects.toThrow("You can only work with your own school's data.");
+      expect(mockAtSmsSend).not.toHaveBeenCalled();
+    });
+
+    test('refuses a student from another school', async () => {
+      mockDocSend.mockImplementation(async (params) => (
+        params.Key ? { Item: { ...STUDENT_ON_FILE, school_id: 'SCH02' } } : {}
+      ));
+      await expect(apiCall(VALID_INPUT)).rejects.toThrow(/guardian on file/);
+      expect(mockAtSmsSend).not.toHaveBeenCalled();
+    });
+
+    test('refuses a number that is not the guardian on file', async () => {
+      await expect(apiCall({ ...VALID_INPUT, guardian_phone: '+254799999999' })).rejects.toThrow(/guardian on file/);
+      expect(mockAtSmsSend).not.toHaveBeenCalled();
+    });
+
+    test("reads the caller's school from Cognito when the token doesn't carry it", async () => {
+      mockCognitoSend.mockResolvedValue({ UserAttributes: [{ Name: 'custom:school_id', Value: 'SCH01' }] });
+      const result = await apiCall(VALID_INPUT, { username: '+254700000001' });
+      expect(result.success).toBe(true);
+      expect(mockCognitoSend).toHaveBeenCalledTimes(1);
+    });
   });
 });
