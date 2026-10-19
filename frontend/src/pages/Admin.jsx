@@ -7,7 +7,7 @@ import { signOut } from 'aws-amplify/auth'
 import jsPDF from 'jspdf'
 import { NETWORK_SCHOOL_ID } from '../lib/schools'
 import { db } from '../lib/db'
-import { getChronicThreshold, getTermStart, setTermStart, getExamDate, setExamDate, defaultDateRange } from '../lib/settings'
+import { getChronicThreshold, getTermStart, getExamDate, defaultDateRange } from '../lib/settings'
 import { countSchoolDaysBetween, projectEligibility, EXAM_ATTENDANCE_REQUIRED } from '../lib/examEligibility'
 
 const client = generateClient()
@@ -261,8 +261,9 @@ const [contextError, setContextError] = useState('')
   const [riskLoading, setRiskLoading] = useState(false)
   const [riskError, setRiskError] = useState('')
 
-  const [termStart, setTermStartState] = useState(getTermStart)
-  const [examDate, setExamDateState] = useState(getExamDate)
+  // Set on the Settings page; read once here since leaving for Settings remounts this page.
+  const [termStart] = useState(getTermStart)
+  const [examDate] = useState(getExamDate)
   const [eligibility, setEligibility] = useState(null) // { remainingDays, threshold, rows }
   const [eligibilityLoading, setEligibilityLoading] = useState(false)
   const [eligibilityError, setEligibilityError] = useState('')
@@ -484,11 +485,9 @@ useEffect(() => {
   async function handleCheckEligibility() {
     if (!stats || !classId) return
     if (!termStart || !examDate) {
-      setEligibilityError('Set the term start date and the exam date first.')
+      setEligibilityError('Set the term start date and the exam date on the Settings page first.')
       return
     }
-    setTermStart(termStart)
-    setExamDate(examDate)
     setEligibilityLoading(true)
     setEligibilityError('')
     try {
@@ -837,22 +836,10 @@ useEffect(() => {
           Friday and does not skip public holidays.
         </p>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
-          <label className="subtext">
-            Term started{' '}
-            <input
-              type="date"
-              value={termStart}
-              onChange={(e) => {
-                // Saved straight away so the dashboard opens on this term next time.
-                setTermStartState(e.target.value)
-                setTermStart(e.target.value)
-              }}
-            />
-          </label>
-          <label className="subtext">
-            Exam date{' '}
-            <input type="date" value={examDate} onChange={(e) => setExamDateState(e.target.value)} />
-          </label>
+          <span className="subtext">
+            Term started <strong>{termStart || 'not set'}</strong> · Exam date <strong>{examDate || 'not set'}</strong>{' '}
+            (<a href="/admin/settings" onClick={(e) => { e.preventDefault(); navigate('/admin/settings') }}>change in Settings</a>)
+          </span>
           <button onClick={handleCheckEligibility} disabled={eligibilityLoading} className="btn btn-small">
             {eligibilityLoading ? 'Checking…' : 'Check Exam Eligibility'}
           </button>

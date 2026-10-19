@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
 import { signOut } from 'aws-amplify/auth'
-import { getChronicThreshold, setChronicThreshold } from '../lib/settings'
+import { getChronicThreshold, setChronicThreshold, getTermStart, setTermStart, getExamDate, setExamDate } from '../lib/settings'
 import { getCurrentUserContext, getClassesForSchool } from '../lib/auth'
 import { SMS_PREFERENCES, DEFAULT_SMS_PREFERENCE } from '../lib/smsPreference'
 
@@ -98,6 +98,12 @@ export default function AdminSettings() {
   // Threshold section
   const [thresholdPercent, setThresholdPercent] = useState(Math.round(getChronicThreshold() * 100))
   const [thresholdSaved, setThresholdSaved] = useState(false)
+
+  // Term dates section
+  const [termStartInput, setTermStartInput] = useState(getTermStart)
+  const [examDateInput, setExamDateInput] = useState(getExamDate)
+  const [termDatesSaved, setTermDatesSaved] = useState(false)
+  const [termDatesError, setTermDatesError] = useState('')
 
   // Guardian phone section
   const [schoolId, setSchoolId] = useState(null)
@@ -197,6 +203,19 @@ export default function AdminSettings() {
     setTimeout(() => setThresholdSaved(false), 2000)
   }
 
+  function handleSaveTermDates(e) {
+    e.preventDefault()
+    if (termStartInput && examDateInput && examDateInput <= termStartInput) {
+      setTermDatesError('The exam date must be after the term start.')
+      return
+    }
+    setTermDatesError('')
+    setTermStart(termStartInput)
+    setExamDate(examDateInput)
+    setTermDatesSaved(true)
+    setTimeout(() => setTermDatesSaved(false), 2000)
+  }
+
   async function handleSaveGuardian(studentId) {
     setSavingId(studentId)
     setSaveError('')
@@ -267,6 +286,36 @@ export default function AdminSettings() {
           <button type="submit" style={{ padding: '6px 12px' }}>Save</button>
           {thresholdSaved && <span style={{ color: 'green', fontSize: 12 }}>Saved</span>}
         </form>
+      </div>
+
+      <div style={{ border: '1px solid #ddd', borderRadius: 6, padding: 16, marginTop: 16 }}>
+        <h4>Term Dates</h4>
+        <p style={{ fontSize: 12, color: '#888' }}>
+          The dashboard opens on the current term, and the exam eligibility check counts attendance from the term start up to the exam date.
+        </p>
+        <form onSubmit={handleSaveTermDates} style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <label style={{ fontSize: 13 }}>
+            Term started{' '}
+            <input
+              type="date"
+              value={termStartInput}
+              onChange={(e) => setTermStartInput(e.target.value)}
+              style={{ padding: 4 }}
+            />
+          </label>
+          <label style={{ fontSize: 13 }}>
+            Exam date{' '}
+            <input
+              type="date"
+              value={examDateInput}
+              onChange={(e) => setExamDateInput(e.target.value)}
+              style={{ padding: 4 }}
+            />
+          </label>
+          <button type="submit" style={{ padding: '6px 12px' }}>Save</button>
+          {termDatesSaved && <span style={{ color: 'green', fontSize: 12 }}>Saved</span>}
+        </form>
+        {termDatesError && <p style={{ color: 'red', fontSize: 13 }}>{termDatesError}</p>}
       </div>
 
       <div style={{ border: '1px solid #ddd', borderRadius: 6, padding: 16, marginTop: 16 }}>
