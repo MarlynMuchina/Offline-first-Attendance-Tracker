@@ -1,5 +1,6 @@
 import { getCurrentUserContext, getClassesForSchool } from '../lib/auth'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
@@ -214,7 +215,9 @@ function cloudCall(promise, ms) {
   ])
 }
 
+// Long per-student lists show this many rows until expanded.
 const RISK_PREVIEW_ROWS = 5
+const RISK_BATCH_SIZE = 5
 
 const ELIGIBILITY_ORDER = { INELIGIBLE: 0, AT_RISK: 1, ON_TRACK: 2, SECURED: 3, NO_DATA: 4 }
 
@@ -270,6 +273,7 @@ const [contextError, setContextError] = useState('')
   const [eligibility, setEligibility] = useState(null) // { remainingDays, threshold, rows }
   const [eligibilityLoading, setEligibilityLoading] = useState(false)
   const [eligibilityError, setEligibilityError] = useState('')
+  const [eligibilityExpanded, setEligibilityExpanded] = useState(false)
 
 const loadData = useCallback(async () => {
   if (!classId) return   // ← add this guard
@@ -462,14 +466,17 @@ useEffect(() => {
     setRiskError('')
     try {
       const studentIds = stats.perStudent.map((p) => p.student.id)
-      const results = await Promise.all(
-        studentIds.map((id) =>
-          client
-            .graphql({ query: predictRiskQuery, variables: { input: { student_id: id } } })
-            .then((res) => ({ id, data: res.data.predictAttendanceRisk }))
-            .catch((err) => ({ id, error: err.message || 'Failed to score' }))
-        )
-      )
+      const scoreOne = (id) => client
+        .graphql({ query: predictRiskQuery, variables: { input: { student_id: id } } })
+        .then((res) => ({ id, data: res.data.predictAttendanceRisk }))
+        .catch((err) => ({ id, error: err.errors?.map((e) => e.message).join('; ') || err.message || 'Failed to score' }))
+      // A few at a time, with one retry, so a whole class doesn't hit the
+      // account's Lambda concurrency limit at once.
+      const results = []
+      for (let i = 0; i < studentIds.length; i += RISK_BATCH_SIZE) {
+        const batch = await Promise.all(studentIds.slice(i, i + RISK_BATCH_SIZE).map(scoreOne))
+        for (const r of batch) results.push(r.error ? await scoreOne(r.id) : r)
+      }
       const byId = {}
       for (const r of results) {
         byId[r.id] = r.data || { risk_level: 'ERROR', reason: r.error }
@@ -779,7 +786,7 @@ useEffect(() => {
                 }}
                 className="markdown-body"
               >
-                <ReactMarkdown>{summary.summary}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{summary.summary}</ReactMarkdown>
               </div>
               {summary.source === 'device' ? (
                 <p className="subtext" style={{ fontSize: 10 }}>
@@ -926,6 +933,7 @@ useEffect(() => {
               <tbody>
                 {[...eligibility.rows]
                   .sort((a, b) => ELIGIBILITY_ORDER[a.status] - ELIGIBILITY_ORDER[b.status] || a.maxMoreAbsences - b.maxMoreAbsences)
+                  .slice(0, eligibilityExpanded ? undefined : RISK_PREVIEW_ROWS)
                   .map((r) => {
                     const label = ELIGIBILITY_LABELS[r.status]
                     return (
@@ -946,6 +954,11 @@ useEffect(() => {
                   })}
               </tbody>
             </table>
+            {eligibility.rows.length > RISK_PREVIEW_ROWS && (
+              <button onClick={() => setEligibilityExpanded((v) => !v)} className="btn btn-small" style={{ marginTop: 8 }}>
+                {eligibilityExpanded ? 'Show less' : `Show all ${eligibility.rows.length} students`}
+              </button>
+            )}
           </>
         )}
       </div>
