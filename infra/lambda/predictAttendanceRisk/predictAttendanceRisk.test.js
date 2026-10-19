@@ -17,6 +17,7 @@
  */
 
 const mockSend = jest.fn();
+const mockCognitoSend = jest.fn();
 
 jest.mock('@aws-sdk/client-dynamodb', () => ({
   DynamoDBClient: jest.fn().mockImplementation(() => ({})),
@@ -29,10 +30,17 @@ jest.mock('@aws-sdk/lib-dynamodb', () => ({
   QueryCommand: jest.fn((params) => params),
 }));
 
+jest.mock('@aws-sdk/client-cognito-identity-provider', () => ({
+  CognitoIdentityProviderClient: jest.fn().mockImplementation(() => ({ send: mockCognitoSend })),
+  AdminGetUserCommand: jest.fn((params) => ({ __type: 'AdminGetUserCommand', ...params })),
+}));
+
 process.env.ATTENDANCE_TABLE = 'AttendanceRecord-test-NONE';
 
 const { handler } = require('./index');
 const model = require('./model_coefficients.json');
+
+const SCH01_CALLER = { claims: { 'custom:school_id': 'SCH01' } };
 
 // ---- Helpers ----
 
@@ -46,6 +54,7 @@ function makeRecords(statusSequence, startDate = '2026-05-04') {
     d.setDate(d.getDate() + i);
     return {
       student_id: 'TEST-S001',
+      school_id: 'SCH01',
       date: d.toISOString().split('T')[0],
       status,
     };
@@ -60,13 +69,13 @@ beforeEach(() => {
 
 describe('predictAttendanceRisk handler', () => {
   test('throws if student_id is missing', async () => {
-    await expect(handler({ arguments: { input: {} } })).rejects.toThrow('student_id is required');
+    await expect(handler({ arguments: { input: {} }, identity: SCH01_CALLER })).rejects.toThrow('student_id is required');
   });
 
   test('supports both AppSync (arguments.input) and direct-invoke shapes', async () => {
     mockSend.mockResolvedValue({ Items: makeRecords(Array(20).fill('PRESENT')) });
 
-    const viaAppSync = await handler({ arguments: { input: { student_id: 'TEST-S001' } } });
+    const viaAppSync = await handler({ arguments: { input: { student_id: 'TEST-S001' } }, identity: SCH01_CALLER });
     expect(viaAppSync.student_id).toBe('TEST-S001');
 
     const viaDirectInvoke = await handler({ student_id: 'TEST-S001' });
@@ -75,7 +84,7 @@ describe('predictAttendanceRisk handler', () => {
 
   test('queries byStudent GSI with student_id only in KeyConditionExpression', async () => {
     mockSend.mockResolvedValue({ Items: makeRecords(Array(10).fill('PRESENT')) });
-    await handler({ arguments: { input: { student_id: 'TEST-S001' } } });
+    await handler({ arguments: { input: { student_id: 'TEST-S001' } }, identity: SCH01_CALLER });
 
     const calledWith = mockSend.mock.calls[0][0];
     expect(calledWith.IndexName).toBe('byStudent');
@@ -88,7 +97,7 @@ describe('predictAttendanceRisk handler', () => {
 
   test('returns UNKNOWN risk level when no records exist for the student', async () => {
     mockSend.mockResolvedValue({ Items: [] });
-    const result = await handler({ arguments: { input: { student_id: 'TEST-S001' } } });
+    const result = await handler({ arguments: { input: { student_id: 'TEST-S001' } }, identity: SCH01_CALLER });
 
     expect(result.risk_level).toBe('UNKNOWN');
     expect(result.risk_score).toBeNull();
@@ -97,13 +106,13 @@ describe('predictAttendanceRisk handler', () => {
 
   test('handles a missing Items array from DynamoDB gracefully', async () => {
     mockSend.mockResolvedValue({}); // no Items key at all
-    const result = await handler({ arguments: { input: { student_id: 'TEST-S001' } } });
+    const result = await handler({ arguments: { input: { student_id: 'TEST-S001' } }, identity: SCH01_CALLER });
     expect(result.risk_level).toBe('UNKNOWN');
   });
 
   test('a perfect-attendance student scores LOW risk', async () => {
     mockSend.mockResolvedValue({ Items: makeRecords(Array(33).fill('PRESENT')) });
-    const result = await handler({ arguments: { input: { student_id: 'TEST-S001' } } });
+    const result = await handler({ arguments: { input: { student_id: 'TEST-S001' } }, identity: SCH01_CALLER });
 
     expect(result.risk_level).toBe('LOW');
     expect(result.risk_score).toBeLessThan(0.3);
@@ -115,7 +124,7 @@ describe('predictAttendanceRisk handler', () => {
     // 25 present days, then 8 straight absences -- steep recent decline.
     const sequence = [...Array(25).fill('PRESENT'), ...Array(8).fill('ABSENT')];
     mockSend.mockResolvedValue({ Items: makeRecords(sequence) });
-    const result = await handler({ arguments: { input: { student_id: 'TEST-S001' } } });
+    const result = await handler({ arguments: { input: { student_id: 'TEST-S001' } }, identity: SCH01_CALLER });
 
     expect(result.risk_level).toBe('HIGH');
     expect(result.features.active_absence_streak_at_cutoff).toBe(8);
@@ -127,7 +136,7 @@ describe('predictAttendanceRisk handler', () => {
     // Rocky start (mostly absent), strong recent recovery.
     const sequence = [...Array(15).fill('ABSENT'), ...Array(18).fill('PRESENT')];
     mockSend.mockResolvedValue({ Items: makeRecords(sequence) });
-    const result = await handler({ arguments: { input: { student_id: 'TEST-S001' } } });
+    const result = await handler({ arguments: { input: { student_id: 'TEST-S001' } }, identity: SCH01_CALLER });
 
     expect(result.features.trend_recent14_minus_overall).toBeGreaterThan(0);
     expect(result.reason).toMatch(/improving/i);
@@ -136,7 +145,7 @@ describe('predictAttendanceRisk handler', () => {
   test('LATE counts as attended, matching checkThreshold and Admin.jsx conventions', async () => {
     const allLate = makeRecords(Array(20).fill('LATE'));
     mockSend.mockResolvedValue({ Items: allLate });
-    const result = await handler({ arguments: { input: { student_id: 'TEST-S001' } } });
+    const result = await handler({ arguments: { input: { student_id: 'TEST-S001' } }, identity: SCH01_CALLER });
 
     expect(result.features.overall_rate).toBe(1);
   });
@@ -146,7 +155,7 @@ describe('predictAttendanceRisk handler', () => {
     const shuffled = [...sorted].reverse(); // worst case: fully reversed
     mockSend.mockResolvedValue({ Items: shuffled });
 
-    const result = await handler({ arguments: { input: { student_id: 'TEST-S001' } } });
+    const result = await handler({ arguments: { input: { student_id: 'TEST-S001' } }, identity: SCH01_CALLER });
     // If the handler didn't re-sort internally, "recent" and "active streak"
     // would be computed from the wrong end of the array.
     expect(result.features.active_absence_streak_at_cutoff).toBe(5);
@@ -154,7 +163,7 @@ describe('predictAttendanceRisk handler', () => {
 
   test('model_trained_at is passed through from the bundled coefficients file', async () => {
     mockSend.mockResolvedValue({ Items: makeRecords(Array(10).fill('PRESENT')) });
-    const result = await handler({ arguments: { input: { student_id: 'TEST-S001' } } });
+    const result = await handler({ arguments: { input: { student_id: 'TEST-S001' } }, identity: SCH01_CALLER });
     expect(result.model_trained_at).toBe(model.training_metadata.trained_at);
   });
 });
@@ -176,10 +185,10 @@ describe('scoring math matches hand-computed expectations', () => {
     ]);
 
     mockSend.mockResolvedValueOnce({ Items: stable });
-    const resultStable = await handler({ arguments: { input: { student_id: 'TEST-S001' } } });
+    const resultStable = await handler({ arguments: { input: { student_id: 'TEST-S001' } }, identity: SCH01_CALLER });
 
     mockSend.mockResolvedValueOnce({ Items: declining });
-    const resultDeclining = await handler({ arguments: { input: { student_id: 'TEST-S001' } } });
+    const resultDeclining = await handler({ arguments: { input: { student_id: 'TEST-S001' } }, identity: SCH01_CALLER });
 
     expect(resultDeclining.risk_score).toBeGreaterThan(resultStable.risk_score);
   });
@@ -187,9 +196,24 @@ describe('scoring math matches hand-computed expectations', () => {
   test('risk_score is always a valid probability', async () => {
     const sequence = [...Array(10).fill('PRESENT'), ...Array(10).fill('ABSENT')];
     mockSend.mockResolvedValue({ Items: makeRecords(sequence) });
-    const result = await handler({ arguments: { input: { student_id: 'TEST-S001' } } });
+    const result = await handler({ arguments: { input: { student_id: 'TEST-S001' } }, identity: SCH01_CALLER });
 
     expect(result.risk_score).toBeGreaterThanOrEqual(0);
     expect(result.risk_score).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('school checks', () => {
+  test("refuses to score a student from another school", async () => {
+    mockSend.mockResolvedValue({ Items: makeRecords(Array(20).fill('PRESENT')) });
+    await expect(handler({
+      arguments: { input: { student_id: 'TEST-S001' } },
+      identity: { claims: { 'custom:school_id': 'SCH02' } },
+    })).rejects.toThrow('This student is not in your school.');
+  });
+
+  test('a direct invoke has no caller to check', async () => {
+    mockSend.mockResolvedValue({ Items: makeRecords(Array(20).fill('PRESENT')) });
+    await expect(handler({ student_id: 'TEST-S001' })).resolves.toMatchObject({ student_id: 'TEST-S001' });
   });
 });
