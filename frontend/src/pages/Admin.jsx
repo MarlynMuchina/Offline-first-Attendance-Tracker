@@ -837,8 +837,7 @@ useEffect(() => {
         </p>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
           <span className="subtext">
-            Term started <strong>{termStart || 'not set'}</strong> · Exam date <strong>{examDate || 'not set'}</strong>{' '}
-            (<a href="/admin/settings" onClick={(e) => { e.preventDefault(); navigate('/admin/settings') }}>change in Settings</a>)
+            Term started <strong>{termStart || 'not set'}</strong> · Exam date <strong>{examDate || 'not set'}</strong>
           </span>
           <button onClick={handleCheckEligibility} disabled={eligibilityLoading} className="btn btn-small">
             {eligibilityLoading ? 'Checking…' : 'Check Exam Eligibility'}
