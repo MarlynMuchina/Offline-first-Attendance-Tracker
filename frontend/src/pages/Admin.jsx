@@ -1,5 +1,6 @@
 import { getCurrentUserContext, getClassesForSchool } from '../lib/auth'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
@@ -214,6 +215,10 @@ function cloudCall(promise, ms) {
   ])
 }
 
+// Long per-student lists show this many rows until expanded.
+const RISK_PREVIEW_ROWS = 5
+const RISK_BATCH_SIZE = 5
+
 const ELIGIBILITY_ORDER = { INELIGIBLE: 0, AT_RISK: 1, ON_TRACK: 2, SECURED: 3, NO_DATA: 4 }
 
 const ELIGIBILITY_LABELS = {
@@ -260,6 +265,7 @@ const [contextError, setContextError] = useState('')
   const [riskResults, setRiskResults] = useState({}) // { studentId: { risk_level, risk_score, reason } }
   const [riskLoading, setRiskLoading] = useState(false)
   const [riskError, setRiskError] = useState('')
+  const [riskExpanded, setRiskExpanded] = useState(false)
 
   // Set on the Settings page; read once here since leaving for Settings remounts this page.
   const [termStart] = useState(getTermStart)
@@ -267,6 +273,7 @@ const [contextError, setContextError] = useState('')
   const [eligibility, setEligibility] = useState(null) // { remainingDays, threshold, rows }
   const [eligibilityLoading, setEligibilityLoading] = useState(false)
   const [eligibilityError, setEligibilityError] = useState('')
+  const [eligibilityExpanded, setEligibilityExpanded] = useState(false)
 
 const loadData = useCallback(async () => {
   if (!classId) return   // ← add this guard
@@ -459,14 +466,17 @@ useEffect(() => {
     setRiskError('')
     try {
       const studentIds = stats.perStudent.map((p) => p.student.id)
-      const results = await Promise.all(
-        studentIds.map((id) =>
-          client
-            .graphql({ query: predictRiskQuery, variables: { input: { student_id: id } } })
-            .then((res) => ({ id, data: res.data.predictAttendanceRisk }))
-            .catch((err) => ({ id, error: err.message || 'Failed to score' }))
-        )
-      )
+      const scoreOne = (id) => client
+        .graphql({ query: predictRiskQuery, variables: { input: { student_id: id } } })
+        .then((res) => ({ id, data: res.data.predictAttendanceRisk }))
+        .catch((err) => ({ id, error: err.errors?.map((e) => e.message).join('; ') || err.message || 'Failed to score' }))
+      // A few at a time, with one retry, so a whole class doesn't hit the
+      // account's Lambda concurrency limit at once.
+      const results = []
+      for (let i = 0; i < studentIds.length; i += RISK_BATCH_SIZE) {
+        const batch = await Promise.all(studentIds.slice(i, i + RISK_BATCH_SIZE).map(scoreOne))
+        for (const r of batch) results.push(r.error ? await scoreOne(r.id) : r)
+      }
       const byId = {}
       for (const r of results) {
         byId[r.id] = r.data || { risk_level: 'ERROR', reason: r.error }
@@ -525,6 +535,18 @@ useEffect(() => {
 
 
 
+  // Scored students, highest risk first.
+  const riskRows = stats
+    ? stats.perStudent
+      .filter((p) => riskResults[p.student.id])
+      .map((p) => ({ ...p, risk: riskResults[p.student.id] }))
+      .sort((a, b) => (b.risk.risk_score ?? 0) - (a.risk.risk_score ?? 0))
+    : []
+  const riskCounts = { HIGH: 0, MEDIUM: 0, LOW: 0 }
+  for (const r of riskRows) {
+    if (r.risk.risk_level in riskCounts) riskCounts[r.risk.risk_level] += 1
+  }
+
   function handleExportPDF() {
     if (!stats) return
 
@@ -574,6 +596,44 @@ useEffect(() => {
           doc.addPage()
           y = 20
         }
+      }
+      y += 6
+    }
+
+    // Lines that run past the page start a new one.
+    const writeLine = (text) => {
+      if (y > 270) {
+        doc.addPage()
+        y = 20
+      }
+      doc.text(text, 14, y)
+      y += 6
+    }
+
+    if (riskRows.length > 0) {
+      doc.setFontSize(13)
+      writeLine('Predicted Attendance Risk')
+      y += 2
+      doc.setFontSize(10)
+      writeLine(`${riskCounts.HIGH} high, ${riskCounts.MEDIUM} medium, ${riskCounts.LOW} low risk`)
+      for (const r of riskRows) {
+        const rate = r.rate !== null ? `${Math.round(r.rate * 100)}%` : 'no records'
+        writeLine(`${r.student.first_name} ${r.student.last_name} — ${r.risk.risk_level} (currently ${rate})`)
+      }
+      y += 6
+    }
+
+    if (eligibility) {
+      const flagged = eligibility.rows
+        .filter((r) => r.status === 'INELIGIBLE' || r.status === 'AT_RISK')
+        .sort((a, b) => ELIGIBILITY_ORDER[a.status] - ELIGIBILITY_ORDER[b.status] || a.maxMoreAbsences - b.maxMoreAbsences)
+      doc.setFontSize(13)
+      writeLine(`Exam Eligibility (exam on ${examDate})`)
+      y += 2
+      doc.setFontSize(10)
+      if (flagged.length === 0) writeLine('Every student can still reach the exam threshold.')
+      for (const r of flagged) {
+        writeLine(`${r.student.first_name} ${r.student.last_name} — ${ELIGIBILITY_LABELS[r.status].text}`)
       }
       y += 6
     }
@@ -726,7 +786,7 @@ useEffect(() => {
                 }}
                 className="markdown-body"
               >
-                <ReactMarkdown>{summary.summary}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{summary.summary}</ReactMarkdown>
               </div>
               {summary.source === 'device' ? (
                 <p className="subtext" style={{ fontSize: 10 }}>
@@ -789,7 +849,11 @@ useEffect(() => {
           {riskLoading ? 'Scoring…' : 'Run Risk Prediction'}
         </button>
         {riskError && <p className="text-error">{riskError}</p>}
-        {Object.keys(riskResults).length > 0 && (
+        {riskRows.length > 0 && (
+          <>
+          <p className="subtext" style={{ marginBottom: 8 }}>
+            {riskCounts.HIGH} high, {riskCounts.MEDIUM} medium and {riskCounts.LOW} low risk. Highest risk first.
+          </p>
           <table>
             <thead>
               <tr>
@@ -800,11 +864,11 @@ useEffect(() => {
               </tr>
             </thead>
             <tbody>
-              {[...stats.perStudent]
-                .filter((p) => riskResults[p.student.id])
-                .sort((a, b) => (riskResults[b.student.id]?.risk_score ?? 0) - (riskResults[a.student.id]?.risk_score ?? 0))
+              {/* Only the top few until expanded, so a full class doesn't
+                  push the rest of the dashboard down. */}
+              {(riskExpanded ? riskRows : riskRows.slice(0, RISK_PREVIEW_ROWS))
                 .map((p) => {
-                  const risk = riskResults[p.student.id]
+                  const risk = p.risk
                   return (
                     <tr key={p.student.id}>
                       <td>{p.student.first_name} {p.student.last_name}</td>
@@ -824,6 +888,12 @@ useEffect(() => {
                 })}
             </tbody>
           </table>
+          {riskRows.length > RISK_PREVIEW_ROWS && (
+            <button onClick={() => setRiskExpanded((v) => !v)} className="btn btn-small" style={{ marginTop: 8 }}>
+              {riskExpanded ? 'Show less' : `Show all ${riskRows.length} students`}
+            </button>
+          )}
+          </>
         )}
       </div>
 
@@ -863,6 +933,7 @@ useEffect(() => {
               <tbody>
                 {[...eligibility.rows]
                   .sort((a, b) => ELIGIBILITY_ORDER[a.status] - ELIGIBILITY_ORDER[b.status] || a.maxMoreAbsences - b.maxMoreAbsences)
+                  .slice(0, eligibilityExpanded ? undefined : RISK_PREVIEW_ROWS)
                   .map((r) => {
                     const label = ELIGIBILITY_LABELS[r.status]
                     return (
@@ -883,6 +954,11 @@ useEffect(() => {
                   })}
               </tbody>
             </table>
+            {eligibility.rows.length > RISK_PREVIEW_ROWS && (
+              <button onClick={() => setEligibilityExpanded((v) => !v)} className="btn btn-small" style={{ marginTop: 8 }}>
+                {eligibilityExpanded ? 'Show less' : `Show all ${eligibility.rows.length} students`}
+              </button>
+            )}
           </>
         )}
       </div>

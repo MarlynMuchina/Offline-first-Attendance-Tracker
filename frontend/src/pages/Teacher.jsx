@@ -31,6 +31,7 @@ const listSchoolStudentsQuery = /* GraphQL */ `
         first_name
         last_name
         class_id
+        status
       }
       nextToken
     }
@@ -117,7 +118,9 @@ export default function Teacher() {
         nextToken = res.data.listStudents.nextToken
       } while (nextToken)
 
-      setAvailableStudents(items.filter((s) => s.class_id !== resolvedClassId))
+      // Only students not in any class (removed students stay out). Moving a
+      // student out of another teacher's class is done by the admin.
+      setAvailableStudents(items.filter((s) => !s.class_id && s.status !== 'INACTIVE'))
     } catch (err) {
       console.error('Failed to load available students:', err)
       setAvailableError(err.message || 'Failed to load students')
