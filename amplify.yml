@@ -1,0 +1,27 @@
+version: 1
+applications:
+  - appRoot: frontend
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        baseDirectory: dist
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+      customHeaders:
+        - pattern: '/sw.js'
+          headers:
+            - key: 'Cache-Control'
+              value: 'no-cache'
+        - pattern: '/index.html'
+          headers:
+            - key: 'Cache-Control'
+              value: 'no-cache'

@@ -5,6 +5,11 @@ cdk.out/
 .DS_Store
 
 frontend/node_modules/
+frontend/dist/
+
+# Editor local history and Lambda upload zips
+.history/
+infra/lambda/*.zip
 
 .vscode/
 
