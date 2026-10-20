@@ -283,4 +283,41 @@ describe('school checks', () => {
     const body = JSON.parse(mockBedrockSend.mock.calls[0][0].body);
     expect(body.messages[0].content).not.toContain('Other School');
   });
+
+  // A real AppSync call carries the access token, so the school comes from Cognito
+  test('looks up the caller in Cognito when the token has no school, and remembers it', async () => {
+    mockCognitoSend.mockResolvedValue({ UserAttributes: [{ Name: 'custom:school_id', Value: 'SCH01' }] });
+    mockDocSend.mockResolvedValue({ Items: [] });
+    mockBedrockSend.mockResolvedValue(bedrockResponseFor('ok'));
+    const event = { arguments: { input: VALID_INPUT }, identity: { username: 'admin-lookup' } };
+
+    await handler(event);
+    await handler(event);
+
+    expect(mockCognitoSend).toHaveBeenCalledTimes(1);
+    expect(mockCognitoSend.mock.calls[0][0]).toMatchObject({ __type: 'AdminGetUserCommand', Username: 'admin-lookup' });
+  });
+
+  test('refuses a call with no signed-in user', async () => {
+    await expect(handler({ arguments: { input: VALID_INPUT }, identity: {} })).rejects.toThrow('Not signed in.');
+  });
+
+  test('refuses an account that has no school', async () => {
+    mockCognitoSend.mockResolvedValue({ UserAttributes: [] });
+    await expect(handler({ arguments: { input: VALID_INPUT }, identity: { username: 'no-school' } }))
+      .rejects.toThrow('This account has no school.');
+  });
+
+  test('tries Cognito again next time if a lookup fails', async () => {
+    mockCognitoSend
+      .mockRejectedValueOnce(new Error('throttled'))
+      .mockResolvedValueOnce({ UserAttributes: [{ Name: 'custom:school_id', Value: 'SCH01' }] });
+    mockDocSend.mockResolvedValue({ Items: [] });
+    mockBedrockSend.mockResolvedValue(bedrockResponseFor('ok'));
+    const event = { arguments: { input: VALID_INPUT }, identity: { username: 'admin-retry' } };
+
+    await expect(handler(event)).rejects.toThrow('throttled');
+    await expect(handler(event)).resolves.toMatchObject({ summary: 'ok' });
+    expect(mockCognitoSend).toHaveBeenCalledTimes(2);
+  });
 });
