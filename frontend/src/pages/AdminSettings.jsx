@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
-import { signOut } from 'aws-amplify/auth'
+import { schoolName } from '../lib/schools'
+import AppShell, { ADMIN_NAV } from '../components/AppShell'
 import { getChronicThreshold, setChronicThreshold, getTermStart, setTermStart, getExamDate, setExamDate } from '../lib/settings'
 import { getCurrentUserContext, getClassesForSchool } from '../lib/auth'
 import { SMS_PREFERENCES, DEFAULT_SMS_PREFERENCE } from '../lib/smsPreference'
@@ -93,7 +93,6 @@ async function fetchAllNotificationPages(schoolId, cutoffIso) {
 }
 
 export default function AdminSettings() {
-  const navigate = useNavigate()
 
   // Threshold section
   const [thresholdPercent, setThresholdPercent] = useState(Math.round(getChronicThreshold() * 100))
@@ -249,28 +248,16 @@ export default function AdminSettings() {
   }
 
   return (
-    <div style={{ maxWidth: 700, margin: '40px auto', fontFamily: 'sans-serif' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>Admin Settings</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => navigate('/admin')} style={{ fontSize: 12, padding: '4px 10px' }}>
-            Back to Dashboard
-          </button>
-          <button
-            onClick={async () => {
-              await signOut()
-              navigate('/login')
-            }}
-            style={{ fontSize: 12, padding: '4px 10px' }}
-          >
-            Sign Out
-          </button>
-        </div>
+    <AppShell nav={ADMIN_NAV} user={{ name: 'School admin', role: schoolName(schoolId) }}>
+      <div>
+        <p className="eyebrow">{schoolName(schoolId)}</p>
+        <h1 className="page-title">Settings</h1>
+        <p className="subtext" style={{ margin: '6px 0 0' }}>Warning line, term dates, guardian phones and the SMS alert log.</p>
       </div>
 
-      <div style={{ border: '1px solid #ddd', borderRadius: 6, padding: 16, marginTop: 24 }}>
+      <div className="card">
         <h4>Chronic Absenteeism Threshold</h4>
-        <p style={{ fontSize: 12, color: '#888' }}>
+        <p style={{ fontSize: 12, color: 'var(--muted)' }}>
           Students below this attendance percentage are flagged on the dashboard.
         </p>
         <form onSubmit={handleSaveThreshold} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -284,13 +271,13 @@ export default function AdminSettings() {
           />
           <span>%</span>
           <button type="submit" style={{ padding: '6px 12px' }}>Save</button>
-          {thresholdSaved && <span style={{ color: 'green', fontSize: 12 }}>Saved</span>}
+          {thresholdSaved && <span style={{ color: 'var(--green-2)', fontSize: 12 }}>Saved</span>}
         </form>
       </div>
 
-      <div style={{ border: '1px solid #ddd', borderRadius: 6, padding: 16, marginTop: 16 }}>
+      <div className="card">
         <h4>Term Dates</h4>
-        <p style={{ fontSize: 12, color: '#888' }}>
+        <p style={{ fontSize: 12, color: 'var(--muted)' }}>
           The dashboard opens on the current term, and the exam eligibility check counts attendance from the term start up to the exam date.
         </p>
         <form onSubmit={handleSaveTermDates} style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -313,23 +300,23 @@ export default function AdminSettings() {
             />
           </label>
           <button type="submit" style={{ padding: '6px 12px' }}>Save</button>
-          {termDatesSaved && <span style={{ color: 'green', fontSize: 12 }}>Saved</span>}
+          {termDatesSaved && <span style={{ color: 'var(--green-2)', fontSize: 12 }}>Saved</span>}
         </form>
-        {termDatesError && <p style={{ color: 'red', fontSize: 13 }}>{termDatesError}</p>}
+        {termDatesError && <p style={{ color: 'var(--red-text)', fontSize: 13 }}>{termDatesError}</p>}
       </div>
 
-      <div style={{ border: '1px solid #ddd', borderRadius: 6, padding: 16, marginTop: 16 }}>
+      <div className="card">
         <h4>Guardian Phones and SMS Alerts</h4>
-        <p style={{ fontSize: 12, color: '#888' }}>
+        <p style={{ fontSize: 12, color: 'var(--muted)' }}>
           Each guardian chooses whether to get a text for every absence, or only when attendance drops below 70% and below the exam line.
         </p>
-        {loading && <p style={{ fontSize: 13, color: '#888' }}>Loading…</p>}
-        {error && <p style={{ color: 'red', fontSize: 13 }}>{error}</p>}
-        {saveError && <p style={{ color: 'red', fontSize: 13 }}>{saveError}</p>}
+        {loading && <p style={{ fontSize: 13, color: 'var(--muted)' }}>Loading…</p>}
+        {error && <p style={{ color: 'var(--red-text)', fontSize: 13 }}>{error}</p>}
+        {saveError && <p style={{ color: 'var(--red-text)', fontSize: 13 }}>{saveError}</p>}
         {!loading && !error && (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
+              <tr style={{ textAlign: 'left', borderBottom: 0 }}>
                 <th>Student</th>
                 <th>Class</th>
                 <th>Guardian Phone</th>
@@ -346,7 +333,7 @@ export default function AdminSettings() {
                   (editedPhones[s.id] !== undefined && editedPhones[s.id] !== s.guardian_phone) ||
                   currentPref !== savedPref
                 return (
-                  <tr key={s.id} style={{ borderBottom: '1px solid #eee' }}>
+                  <tr key={s.id} style={{ borderTop: '1px solid var(--sand)' }}>
                     <td style={{ padding: '8px 0' }}>{s.first_name} {s.last_name}</td>
                     <td>{classNames[s.class_id] || s.class_id}</td>
                     <td>
@@ -389,14 +376,14 @@ export default function AdminSettings() {
         )}
       </div>
 
-      <div style={{ border: '1px solid #ddd', borderRadius: 6, padding: 16, marginTop: 16 }}>
+      <div className="card">
         <h4>SMS Alert Log — Last 30 Days</h4>
-        {notifLoading && <p style={{ fontSize: 13, color: '#888' }}>Loading…</p>}
-        {notifError && <p style={{ color: 'red', fontSize: 13 }}>{notifError}</p>}
+        {notifLoading && <p style={{ fontSize: 13, color: 'var(--muted)' }}>Loading…</p>}
+        {notifError && <p style={{ color: 'var(--red-text)', fontSize: 13 }}>{notifError}</p>}
         {!notifLoading && !notifError && (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
+              <tr style={{ textAlign: 'left', borderBottom: 0 }}>
                 <th>Sent</th>
                 <th>Student</th>
                 <th>Phone</th>
@@ -406,7 +393,7 @@ export default function AdminSettings() {
             </thead>
             <tbody>
               {notifLogs.map((log) => (
-                <tr key={log.id} style={{ borderBottom: '1px solid #eee' }}>
+                <tr key={log.id} style={{ borderTop: '1px solid var(--sand)' }}>
                   <td style={{ padding: '6px 0', fontSize: 12 }}>
                     {new Date(log.created_at).toLocaleString()}
                   </td>
@@ -415,7 +402,7 @@ export default function AdminSettings() {
                   <td>
                     <span style={{
                       fontSize: 11, padding: '2px 8px', borderRadius: 10,
-                      color: log.status === 'SENT' ? '#080' : '#c00',
+                      color: log.status === 'SENT' ? 'var(--green-2)' : 'var(--red)',
                       border: '1px solid currentColor',
                     }}>
                       {log.status}
@@ -426,7 +413,7 @@ export default function AdminSettings() {
               ))}
               {notifLogs.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="subtext" style={{ padding: '12px 6px', fontSize: 13, color: '#888' }}>
+                  <td colSpan={5} className="subtext" style={{ padding: '12px 6px', fontSize: 13, color: 'var(--muted)' }}>
                     No SMS alerts sent in the last 30 days.
                   </td>
                 </tr>
@@ -435,6 +422,6 @@ export default function AdminSettings() {
           </table>
         )}
       </div>
-    </div>
+    </AppShell>
   )
 }
