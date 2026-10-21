@@ -89,7 +89,7 @@ export default function SchoolAdmins() {
   )
 
   return (
-    <div className="card" style={{ marginTop: 24 }}>
+    <div className="card">
       <h4>School admins</h4>
       <p className="subtext">
         Each school has its own admin login. Create one here, then give the admin their phone number and

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Navigate } from 'react-router-dom'
 import { fetchAuthSession, signOut } from 'aws-amplify/auth'
+import { LoadingScreen } from './AppShell'
 
 export default function ProtectedRoute({ children, allowedGroups }) {
   const [checking, setChecking] = useState(true)
@@ -37,7 +38,7 @@ export default function ProtectedRoute({ children, allowedGroups }) {
   }, [allowedGroups])
 
   if (checking) {
-    return <div style={{ textAlign: 'center', marginTop: 80 }}>Checking session…</div>
+    return <LoadingScreen message="Checking your sign-in…" />
   }
 
   if (!authenticated) {
@@ -46,7 +47,7 @@ export default function ProtectedRoute({ children, allowedGroups }) {
 
   if (!authorized) {
     return (
-      <div style={{ textAlign: 'center', marginTop: 80 }}>
+      <div className="state-screen">
         <h3>Access denied</h3>
         <p>Your account role doesn't have permission to view this page.</p>
         <button
@@ -54,7 +55,7 @@ export default function ProtectedRoute({ children, allowedGroups }) {
             await signOut()
             window.location.href = '/login'
           }}
-          style={{ padding: '8px 16px', marginTop: 12 }}
+          className="btn"
         >
           Sign Out
         </button>

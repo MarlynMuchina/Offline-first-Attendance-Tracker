@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
-import { signOut } from 'aws-amplify/auth'
+import { schoolName } from '../lib/schools'
+import AppShell, { ADMIN_NAV } from '../components/AppShell'
 import { getCurrentUserContext } from '../lib/auth'
 import { SMS_PREFERENCES, DEFAULT_SMS_PREFERENCE } from '../lib/smsPreference'
 
@@ -154,7 +154,6 @@ const createStudentWithClassMutation = /* GraphQL */ `
 `
 
 export default function ClassManagement() {
-  const navigate = useNavigate()
   const [schoolId, setSchoolId] = useState(null)
 
   const [teachers, setTeachers] = useState([])
@@ -628,34 +627,22 @@ export default function ClassManagement() {
   }
 
   return (
-    <div style={{ maxWidth: 700, margin: '40px auto', fontFamily: 'sans-serif' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>Classes & Teachers</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => navigate('/admin')} style={{ fontSize: 12, padding: '4px 10px' }}>
-            Back to Dashboard
-          </button>
-          <button
-            onClick={async () => {
-              await signOut()
-              navigate('/login')
-            }}
-            style={{ fontSize: 12, padding: '4px 10px' }}
-          >
-            Sign Out
-          </button>
-        </div>
+    <AppShell nav={ADMIN_NAV} user={{ name: 'School admin', role: schoolName(schoolId) }}>
+      <div>
+        <p className="eyebrow">{schoolName(schoolId)}</p>
+        <h1 className="page-title">Classes &amp; teachers</h1>
+        <p className="subtext" style={{ margin: '6px 0 0' }}>Add and edit teachers, classes and students for your school.</p>
       </div>
 
-      <div style={{ border: '1px solid #ddd', borderRadius: 6, padding: 16, marginTop: 24 }}>
+      <div className="card">
         <h4>Teachers</h4>
-        {teachersLoading && <p style={{ fontSize: 13, color: '#888' }}>Loading…</p>}
-        {teachersError && <p style={{ color: 'red', fontSize: 13 }}>{teachersError}</p>}
-        {teacherActionError && <p style={{ color: 'red', fontSize: 13 }}>{teacherActionError}</p>}
+        {teachersLoading && <p style={{ fontSize: 13, color: 'var(--muted)' }}>Loading…</p>}
+        {teachersError && <p style={{ color: 'var(--red-text)', fontSize: 13 }}>{teachersError}</p>}
+        {teacherActionError && <p style={{ color: 'var(--red-text)', fontSize: 13 }}>{teacherActionError}</p>}
         {!teachersLoading && !teachersError && (
           <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16 }}>
             <thead>
-              <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
+              <tr style={{ textAlign: 'left', borderBottom: 0 }}>
                 <th>Name</th>
                 <th>Phone (login)</th>
                 <th>Email</th>
@@ -664,14 +651,14 @@ export default function ClassManagement() {
             </thead>
             <tbody>
               {teachers.map((t) => (
-                <tr key={t.id} style={{ borderBottom: '1px solid #eee' }}>
+                <tr key={t.id} style={{ borderTop: '1px solid var(--sand)' }}>
                   {editingTeacherId === t.id ? (
                     <>
                       <td style={{ padding: '6px 0' }}>
                         <input value={editTeacherFirstName} onChange={(e) => setEditTeacherFirstName(e.target.value)} style={{ padding: 4, width: 90, marginRight: 4 }} />
                         <input value={editTeacherLastName} onChange={(e) => setEditTeacherLastName(e.target.value)} style={{ padding: 4, width: 90 }} />
                       </td>
-                      <td style={{ fontSize: 12, color: '#888' }}>{t.phone_number || '—'}</td>
+                      <td style={{ fontSize: 12, color: 'var(--muted)' }}>{t.phone_number || '—'}</td>
                       <td>
                         <input value={editTeacherEmail} onChange={(e) => setEditTeacherEmail(e.target.value)} style={{ padding: 4, width: 140 }} />
                       </td>
@@ -695,7 +682,7 @@ export default function ClassManagement() {
                         <button
                           onClick={() => handleDeleteTeacher(t.id, `${t.first_name} ${t.last_name}`)}
                           disabled={deletingTeacherId === t.id}
-                          style={{ fontSize: 11, padding: '4px 8px', color: '#c00' }}
+                          className="btn-danger" style={{ fontSize: 11, padding: '4px 8px' }}
                         >
                           {deletingTeacherId === t.id ? 'Removing…' : 'Delete'}
                         </button>
@@ -706,7 +693,7 @@ export default function ClassManagement() {
               ))}
               {teachers.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="subtext" style={{ padding: '12px 6px', fontSize: 13, color: '#888' }}>
+                  <td colSpan={4} className="subtext" style={{ padding: '12px 6px', fontSize: 13, color: 'var(--muted)' }}>
                     No teachers added yet.
                   </td>
                 </tr>
@@ -742,21 +729,21 @@ export default function ClassManagement() {
             {addingTeacher ? 'Creating account…' : 'Add Teacher'}
           </button>
         </form>
-        <p style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
+        <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
           This creates a real login for the teacher. You'll be shown a temporary password to give them.
         </p>
-        {addTeacherError && <p style={{ color: 'red', fontSize: 13, marginTop: 8 }}>{addTeacherError}</p>}
+        {addTeacherError && <p style={{ color: 'var(--red-text)', fontSize: 13, marginTop: 8 }}>{addTeacherError}</p>}
       </div>
 
-      <div style={{ border: '1px solid #ddd', borderRadius: 6, padding: 16, marginTop: 16 }}>
+      <div className="card">
         <h4>Classes</h4>
-        {classesLoading && <p style={{ fontSize: 13, color: '#888' }}>Loading…</p>}
-        {classesError && <p style={{ color: 'red', fontSize: 13 }}>{classesError}</p>}
-        {classActionError && <p style={{ color: 'red', fontSize: 13 }}>{classActionError}</p>}
+        {classesLoading && <p style={{ fontSize: 13, color: 'var(--muted)' }}>Loading…</p>}
+        {classesError && <p style={{ color: 'var(--red-text)', fontSize: 13 }}>{classesError}</p>}
+        {classActionError && <p style={{ color: 'var(--red-text)', fontSize: 13 }}>{classActionError}</p>}
         {!classesLoading && !classesError && (
           <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16 }}>
             <thead>
-              <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
+              <tr style={{ textAlign: 'left', borderBottom: 0 }}>
                 <th>Name</th>
                 <th>Grade</th>
                 <th>Stream</th>
@@ -766,7 +753,7 @@ export default function ClassManagement() {
             </thead>
             <tbody>
               {classes.map((c) => (
-                <tr key={c.id} style={{ borderBottom: '1px solid #eee' }}>
+                <tr key={c.id} style={{ borderTop: '1px solid var(--sand)' }}>
                   {editingClassId === c.id ? (
                     <>
                       <td style={{ padding: '6px 0' }}>
@@ -808,7 +795,7 @@ export default function ClassManagement() {
                         <button
                           onClick={() => handleDeleteClass(c.id, c.name)}
                           disabled={deletingClassId === c.id}
-                          style={{ fontSize: 11, padding: '4px 8px', color: '#c00' }}
+                          className="btn-danger" style={{ fontSize: 11, padding: '4px 8px' }}
                         >
                           {deletingClassId === c.id ? 'Deleting…' : 'Delete'}
                         </button>
@@ -819,7 +806,7 @@ export default function ClassManagement() {
               ))}
               {classes.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="subtext" style={{ padding: '12px 6px', fontSize: 13, color: '#888' }}>
+                  <td colSpan={5} className="subtext" style={{ padding: '12px 6px', fontSize: 13, color: 'var(--muted)' }}>
                     No classes added yet.
                   </td>
                 </tr>
@@ -854,14 +841,14 @@ export default function ClassManagement() {
             {addingClass ? 'Adding…' : 'Add Class'}
           </button>
         </form>
-        {addClassError && <p style={{ color: 'red', fontSize: 13, marginTop: 8 }}>{addClassError}</p>}
+        {addClassError && <p style={{ color: 'var(--red-text)', fontSize: 13, marginTop: 8 }}>{addClassError}</p>}
       </div>
 
-      <div style={{ border: '1px solid #ddd', borderRadius: 6, padding: 16, marginTop: 16 }}>
+      <div className="card">
         <h4>Students</h4>
-        {studentsLoading && <p style={{ fontSize: 13, color: '#888' }}>Loading…</p>}
-        {studentsError && <p style={{ color: 'red', fontSize: 13 }}>{studentsError}</p>}
-        {studentActionError && <p style={{ color: 'red', fontSize: 13 }}>{studentActionError}</p>}
+        {studentsLoading && <p style={{ fontSize: 13, color: 'var(--muted)' }}>Loading…</p>}
+        {studentsError && <p style={{ color: 'var(--red-text)', fontSize: 13 }}>{studentsError}</p>}
+        {studentActionError && <p style={{ color: 'var(--red-text)', fontSize: 13 }}>{studentActionError}</p>}
 
         {!studentsLoading && !studentsError && (
           <>
@@ -887,7 +874,7 @@ export default function ClassManagement() {
 
             <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16 }}>
               <thead>
-                <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
+                <tr style={{ textAlign: 'left', borderBottom: 0 }}>
                   <th></th>
                   <th>Student</th>
                   <th>Current Class</th>
@@ -897,7 +884,7 @@ export default function ClassManagement() {
               </thead>
               <tbody>
                 {allStudents.map((s) => (
-                  <tr key={s.id} style={{ borderBottom: '1px solid #eee' }}>
+                  <tr key={s.id} style={{ borderTop: '1px solid var(--sand)' }}>
                     <td>
                       <input
                         type="checkbox"
@@ -919,14 +906,14 @@ export default function ClassManagement() {
                         ))}
                       </select>
                     </td>
-                    <td style={{ fontSize: 12, color: s.status === 'INACTIVE' ? '#c00' : '#080' }}>
+                    <td style={{ fontSize: 12, color: s.status === 'INACTIVE' ? 'var(--red)' : 'var(--green-2)' }}>
                       {s.status || 'ACTIVE'}
                     </td>
                     <td>
                       <button
                         onClick={() => handleRemoveStudent(s.id, `${s.first_name} ${s.last_name}`)}
                         disabled={movingStudentId === s.id}
-                        style={{ fontSize: 11, padding: '4px 8px', color: '#c00' }}
+                        className="btn-danger" style={{ fontSize: 11, padding: '4px 8px' }}
                       >
                         Remove
                       </button>
@@ -935,7 +922,7 @@ export default function ClassManagement() {
                 ))}
                 {allStudents.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="subtext" style={{ padding: '12px 6px', fontSize: 13, color: '#888' }}>
+                    <td colSpan={5} className="subtext" style={{ padding: '12px 6px', fontSize: 13, color: 'var(--muted)' }}>
                       No students added yet.
                     </td>
                   </tr>
@@ -980,6 +967,6 @@ export default function ClassManagement() {
           </button>
         </form>
       </div>
-    </div>
+    </AppShell>
   )
 }

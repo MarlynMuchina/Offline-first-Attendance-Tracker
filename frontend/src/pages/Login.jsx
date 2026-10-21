@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { signIn, confirmSignIn, signOut, fetchAuthSession } from 'aws-amplify/auth'
 import { NETWORK_SCHOOL_ID } from '../lib/schools'
+import { greetingFor } from '../lib/display'
+import { BrandMark } from '../components/AppShell'
 
 // Sends Angaza staff to the network view, admins and head teachers to the
 // dashboard and everyone else to the register, based on the fresh ID token.
@@ -68,63 +70,110 @@ export default function Login() {
     }
   }
 
+  const side = (
+    <section className="auth-side">
+      <Link to="/" className="brand brand-link" style={{ padding: 0 }}>
+        <BrandMark size={44} />
+        <div className="brand-text">
+          <strong>CSG Attendance</strong>
+          <span>Angaza Center</span>
+        </div>
+      </Link>
+      <div className="auth-pitch">
+        <h1>Attendance that keeps working offline.</h1>
+        <p>
+          Teachers mark the register on any phone, with or without internet. Admins see who needs help,
+          and guardians get an SMS.
+        </p>
+        <div className="tags">
+          <span className="tag">Works offline</span>
+          <span className="tag">SMS to guardians</span>
+          <span className="tag">AI summaries</span>
+        </div>
+      </div>
+    </section>
+  )
+
   if (needsNewPassword) {
     return (
-      <div className="auth-wrap">
-        <h2 style={{ textAlign: 'center' }}>Set a New Password</h2>
-        <p className="subtext" style={{ textAlign: 'center' }}>
-          This is your first time signing in — choose a permanent password.
-        </p>
-        <form onSubmit={handleNewPassword}>
-          <label className="field-label">New Password</label>
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            className="input"
-            style={{ marginBottom: 16 }}
-          />
-          {error && <p className="text-error">{error}</p>}
-          <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-            SET PASSWORD
-          </button>
-        </form>
+      <div className="auth">
+        {side}
+        <main className="auth-main">
+          <div className="card auth-card">
+            <div>
+              <h2>Set a new password</h2>
+              <p className="subtext" style={{ margin: '4px 0 0' }}>
+                This is your first time signing in — choose a permanent password.
+              </p>
+            </div>
+            <form onSubmit={handleNewPassword}>
+              <div>
+                <label className="field-label" htmlFor="new-password">New password</label>
+                <input
+                  id="new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="input"
+                />
+              </div>
+              {error && <p className="text-error" style={{ margin: 0 }}>{error}</p>}
+              <button type="submit" className="btn btn-primary">
+                Set password
+              </button>
+            </form>
+          </div>
+        </main>
       </div>
     )
   }
 
   return (
-    <div className="auth-wrap">
-      <h2 style={{ textAlign: 'center' }}>Student Attendance Tracker</h2>
-      <p className="subtext" style={{ textAlign: 'center' }}>Sign in to continue</p>
-      <form onSubmit={handleSubmit}>
-        <label className="field-label">Phone Number</label>
-        <input
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="+2547XXXXXXXX"
-          className="input"
-          style={{ marginBottom: 16 }}
-        />
-        <label className="field-label">Password</label>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="input"
-          style={{ marginBottom: 16 }}
-        />
-        {error && <p className="text-error">{error}</p>}
-        <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-          LOG IN
-        </button>
-      </form>
-      <div className="notice-box">
-        <strong>Offline access</strong>
-        <p style={{ margin: '6px 0 0' }}>
-          You can log in and record attendance without internet. Data syncs once you're back online.
-        </p>
-      </div>
+    <div className="auth">
+      {side}
+      <main className="auth-main">
+        <div className="card auth-card">
+          <div>
+            <h2>{greetingFor()}</h2>
+            <p className="subtext" style={{ margin: '4px 0 0' }}>Sign in to Student Attendance Tracker</p>
+          </div>
+          <form onSubmit={handleSubmit}>
+            <div>
+              <label className="field-label" htmlFor="phone">Phone number</label>
+              <input
+                id="phone"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+2547XXXXXXXX"
+                className="input"
+              />
+            </div>
+            <div>
+              <label className="field-label" htmlFor="password">Password</label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="input"
+              />
+            </div>
+            {error && <p className="text-error" style={{ margin: 0 }}>{error}</p>}
+            <button type="submit" className="btn btn-primary">
+              Log in
+            </button>
+          </form>
+          <div className="notice-box">
+            <strong>Offline access</strong>
+            <p style={{ margin: '6px 0 0' }}>
+              Sign in once with internet on this device. After that you stay signed in, and attendance can be
+              recorded without internet. It syncs once you're back online.
+            </p>
+          </div>
+          <Link to="/" className="btn auth-home-link">Back to home page</Link>
+        </div>
+      </main>
     </div>
   )
 }

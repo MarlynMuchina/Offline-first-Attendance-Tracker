@@ -10,6 +10,9 @@ import { NETWORK_SCHOOL_ID } from '../lib/schools'
 import { db } from '../lib/db'
 import { getChronicThreshold, getTermStart, getExamDate, defaultDateRange } from '../lib/settings'
 import { countSchoolDaysBetween, projectEligibility, EXAM_ATTENDANCE_REQUIRED } from '../lib/examEligibility'
+import { schoolName } from '../lib/schools'
+import { greetingFor, formatDay, weeklyRates } from '../lib/display'
+import AppShell, { ADMIN_NAV, Ring, LoadingScreen } from '../components/AppShell'
 
 const client = generateClient()
 
@@ -162,7 +165,7 @@ function computeStats(students, records, threshold) {
     .filter((p) => p.rate !== null && p.rate < threshold)
     .sort((a, b) => a.rate - b.rate)
 
-  return { perStudent, overallRate, chronic }
+  return { perStudent, overallRate, chronic, weekly: weeklyRates(records) }
 }
 
 // Backup summary written on the device from the dashboard figures, used when
@@ -222,12 +225,14 @@ const RISK_BATCH_SIZE = 5
 const ELIGIBILITY_ORDER = { INELIGIBLE: 0, AT_RISK: 1, ON_TRACK: 2, SECURED: 3, NO_DATA: 4 }
 
 const ELIGIBILITY_LABELS = {
-  INELIGIBLE: { text: 'NOT ELIGIBLE', color: '#c00' },
-  AT_RISK: { text: 'AT RISK', color: '#c80' },
-  ON_TRACK: { text: 'ON TRACK', color: '#080' },
-  SECURED: { text: 'ELIGIBLE', color: '#080' },
-  NO_DATA: { text: 'NO DATA', color: '#888' },
+  INELIGIBLE: { text: 'NOT ELIGIBLE', tone: 'pill-red' },
+  AT_RISK: { text: 'AT RISK', tone: 'pill-amber' },
+  ON_TRACK: { text: 'ON TRACK', tone: 'pill-green' },
+  SECURED: { text: 'ELIGIBLE', tone: 'pill-green' },
+  NO_DATA: { text: 'NO DATA', tone: 'pill-gray' },
 }
+
+const RISK_TONES = { HIGH: 'pill-red', MEDIUM: 'pill-amber', LOW: 'pill-green' }
 
 function describeEligibility(r) {
   const pct = Math.round(r.projectedBestRate * 100)
@@ -255,6 +260,7 @@ const [contextError, setContextError] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [stats, setStats] = useState(null)
+  const [chronicExpanded, setChronicExpanded] = useState(false)
   const [savedCopy, setSavedCopy] = useState(null) // { saved_at, startDate, endDate } when showing device data
 
   const [summary, setSummary] = useState(null)
@@ -664,12 +670,12 @@ useEffect(() => {
   )
 
   if (loading) {
-    return <div className="page" style={{ textAlign: 'center', marginTop: 80 }}>Loading dashboard…</div>
+    return <LoadingScreen message="Loading dashboard…" />
   }
 
   if (contextError) {
   return (
-    <div className="page" style={{ textAlign: 'center', marginTop: 80 }}>
+    <div className="state-screen">
       <h3>Couldn't determine your school/class</h3>
       <p className="text-error">{contextError}</p>
       {signOutButton}
@@ -679,7 +685,7 @@ useEffect(() => {
 
   if (error) {
     return (
-      <div className="page" style={{ textAlign: 'center', marginTop: 80 }}>
+      <div className="state-screen">
         <h3>Couldn't load dashboard data</h3>
         <p className="text-error">{error}</p>
         <div className="button-group" style={{ justifyContent: 'center' }}>
@@ -691,82 +697,127 @@ useEffect(() => {
   }
 
   if (!stats) {
-    return <div className="page" style={{ textAlign: 'center', marginTop: 80 }}>No data available.</div>
+    return <div className="state-screen subtext">No data available.</div>
   }
 
+  const thresholdPct = Math.round(getChronicThreshold() * 100)
+  const className = classes.find((c) => c.id === classId)?.name || 'This class'
+  const recentWeeks = stats.weekly.slice(-8)
+  const showResultsFullWidth = riskRows.length > 0 || eligibility !== null
+
   return (
-    <div className="page">
-      <div className="page-header">
-        <h2>Administrator Dashboard</h2>
-        <div className="button-group">
-          <button onClick={handleExportPDF} className="btn btn-small">Export PDF</button>
-          <button onClick={() => navigate('/admin/classes')} className="btn btn-small">Classes</button>
-          <button onClick={() => navigate('/admin/settings')} className="btn btn-small">Settings</button>
-          {signOutButton}
-        </div>
-      </div>
+    <AppShell nav={ADMIN_NAV} user={{ name: 'School admin', role: schoolName(schoolId) }}>
+      <p className="eyebrow">Administrator dashboard · {schoolName(schoolId)}</p>
+
       {savedCopy && (
-        <div style={{
-          marginBottom: 16, padding: '10px 14px', border: '1px solid #c80',
-          borderRadius: 6, background: '#fff8ec', fontSize: 13, color: '#8a5a00',
-        }}>
-          Offline: showing the copy saved on this device on {new Date(savedCopy.saved_at).toLocaleString()},
-          covering {savedCopy.startDate} to {savedCopy.endDate}. It refreshes when you're back online.
+        <div className="notice">
+          <span>
+            Offline: showing the copy saved on this device on {new Date(savedCopy.saved_at).toLocaleString()},
+            covering {savedCopy.startDate} to {savedCopy.endDate}. It refreshes when you're back online.
+          </span>
         </div>
       )}
       {adminWarning && (
-        <div style={{
-          marginBottom: 16, padding: '10px 14px', border: '1px solid #c80',
-          borderRadius: 6, background: '#fff8ec', fontSize: 13, color: '#8a5a00',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}>
+        <div className="notice">
           <span>⚠ {adminWarning}</span>
-          <button onClick={() => setAdminWarning('')} style={{ fontSize: 12, padding: '2px 8px' }}>Dismiss</button>
+          <button onClick={() => setAdminWarning('')} className="btn-small">Dismiss</button>
         </div>
       )}
-      <div className="button-group" style={{ alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-        <label className="subtext">
-          Class{' '}
-          <select value={classId || ''} onChange={(e) => changeView({ nextClassId: e.target.value })}>
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </label>
-        <label className="subtext">
-          From{' '}
-          <input
-            type="date"
-            value={startDate}
-            max={endDate}
-            onChange={(e) => e.target.value && changeView({ nextStart: e.target.value })}
-          />
-        </label>
-        <label className="subtext">
-          To{' '}
-          <input
-            type="date"
-            value={endDate}
-            min={startDate}
-            onChange={(e) => e.target.value && changeView({ nextEnd: e.target.value })}
-          />
-        </label>
+
+      <div className="hero-row">
+        <section className="card hero">
+          <Ring value={stats.overallRate} caption="average" />
+          <div className="hero-body">
+            <h1>{greetingFor()}, Admin</h1>
+            <p>
+              {stats.overallRate !== null
+                ? `${className} averages ${Math.round(stats.overallRate * 100)}% over the selected range. `
+                : `No attendance has been marked for ${className} in this range. `}
+              {stats.chronic.length === 1
+                ? `1 student is below ${thresholdPct}%.`
+                : `${stats.chronic.length} students are below ${thresholdPct}%.`}
+            </p>
+            <div className="filters">
+              <label className="filter">
+                Class
+                <select value={classId || ''} onChange={(e) => changeView({ nextClassId: e.target.value })}>
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="filter">
+                From
+                <input
+                  type="date"
+                  value={startDate}
+                  max={endDate}
+                  onChange={(e) => e.target.value && changeView({ nextStart: e.target.value })}
+                />
+              </label>
+              <label className="filter">
+                To
+                <input
+                  type="date"
+                  value={endDate}
+                  min={startDate}
+                  onChange={(e) => e.target.value && changeView({ nextEnd: e.target.value })}
+                />
+              </label>
+            </div>
+            <p className="subtext" style={{ margin: 0 }}>Showing data from {startDate} to {endDate}</p>
+            <div className="button-group">
+              <button onClick={handleExportPDF} className="btn">Export PDF</button>
+            </div>
+          </div>
+        </section>
+
+        <section className="card card-dark">
+          <h2>Term calendar</h2>
+          <div className="info-rows">
+            <div className="info-row"><span>Term started</span><strong>{formatDay(termStart)}</strong></div>
+            <div className="info-row"><span>Exams begin</span><strong>{formatDay(examDate)}</strong></div>
+            <div className="info-row">
+              <span>Exam eligibility</span>
+              <strong>{(EXAM_ATTENDANCE_REQUIRED * 100).toFixed(1)}%</strong>
+            </div>
+          </div>
+        </section>
       </div>
-      <p className="subtext">Showing data from {startDate} to {endDate}</p>
 
-      <div className="card-row">
-        <div className="card">
-          <h4>Attendance Trend</h4>
-          <p className="big-stat">
-            {stats.overallRate !== null ? `${Math.round(stats.overallRate * 100)}%` : '—'}
+      <div className="card-grid">
+        <section className="card">
+          <h2>Attendance trend</h2>
+          {recentWeeks.length === 0 ? (
+            <p className="subtext">No attendance recorded in this range.</p>
+          ) : (
+            <div className="week-bars">
+              {recentWeeks.map((w) => (
+                <div key={w.weekStart} className="week-bar">
+                  <span className="subtext" style={{ margin: 0 }}>w/c {formatDay(w.weekStart).replace(/ \d{4}$/, '')}</span>
+                  <div className="week-bar-track">
+                    <div
+                      className={`week-bar-fill${w.rate < getChronicThreshold() ? ' is-low' : ''}`}
+                      style={{ width: `${Math.round(w.rate * 100)}%` }}
+                    />
+                  </div>
+                  <strong style={{ textAlign: 'right' }}>{Math.round(w.rate * 100)}%</strong>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="subtext" style={{ margin: '14px 0 0' }}>
+            Weekly attendance{stats.weekly.length > recentWeeks.length ? ', last 8 weeks of the range' : ''}. Amber weeks are below {thresholdPct}%.
           </p>
-          <p className="subtext">Average over selected range</p>
-        </div>
+        </section>
 
-        <div className="card card-dashed">
-          <h4>AI Summary (Claude via Bedrock)</h4>
+        <section className="card card-dashed">
+          <h2>AI summary <span className="count">(Claude via Bedrock)</span></h2>
           {!summary && !summaryLoading && (
-            <button onClick={handleGenerateSummary} className="btn btn-small">Generate Summary</button>
+            <>
+              <p className="subtext">A short written summary of {className}'s attendance for the dates above.</p>
+              <button onClick={handleGenerateSummary} className="btn btn-primary">Generate Summary</button>
+            </>
           )}
           {summaryLoading && <p className="subtext">Generating…</p>}
           {summaryError && <p className="text-error">{summaryError}</p>}
@@ -776,7 +827,7 @@ useEffect(() => {
                   the rest of the dashboard down. */}
               <div
                 style={{
-                  fontSize: 13,
+                  fontSize: 14,
                   maxHeight: summaryExpanded ? 'none' : '8em',
                   overflow: 'hidden',
                   ...(summaryExpanded ? {} : {
@@ -789,179 +840,191 @@ useEffect(() => {
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{summary.summary}</ReactMarkdown>
               </div>
               {summary.source === 'device' ? (
-                <p className="subtext" style={{ fontSize: 10 }}>
+                <p className="subtext" style={{ fontSize: 11 }}>
                   Claude via Bedrock couldn't be reached, so this summary was written on this device from the
                   attendance figures. Click Regenerate when you're online for the AI version.
                 </p>
               ) : (
-                <p className="subtext" style={{ fontSize: 10 }}>
+                <p className="subtext" style={{ fontSize: 11 }}>
                   Generated at {new Date(summary.generated_at).toLocaleString()}, saved on this device
                   {summary.start_date && (summary.start_date !== startDate || summary.end_date !== endDate) &&
                     `. Covers ${summary.start_date} to ${summary.end_date}; regenerate for the dates above.`}
                 </p>
               )}
               <div className="button-group">
-                <button onClick={() => setSummaryExpanded((v) => !v)} className="btn btn-small">
+                <button onClick={() => setSummaryExpanded((v) => !v)} className="btn-small">
                   {summaryExpanded ? 'Show less' : 'Read full summary'}
                 </button>
-                <button onClick={handleGenerateSummary} disabled={summaryLoading} className="btn btn-small">
+                <button onClick={handleGenerateSummary} disabled={summaryLoading} className="btn-small">
                   {summaryLoading ? 'Generating…' : 'Regenerate'}
                 </button>
               </div>
             </>
           )}
-        </div>
+        </section>
       </div>
 
-            <h4>Students Below {Math.round(getChronicThreshold() * 100)}% Attendance ({stats.chronic.length})</h4>
-      <table>
-        <thead>
-          <tr>
-            <th>Student</th>
-            <th>Attendance rate</th>
-            <th>Absences</th>
-          </tr>
-        </thead>
-        <tbody>
-              {stats.chronic.map((c) => (
-            <tr key={c.student.id}>
-              <td>{c.student.first_name} {c.student.last_name}</td>
-              <td>{Math.round(c.rate * 100)}%</td>
-              <td>{c.absent}</td>
-            </tr>
-          ))}
-                    {stats.chronic.length === 0 && (
-            <tr>
-              <td colSpan={3} className="subtext" style={{ padding: '12px 6px' }}>
-                No students currently below the threshold.
-              </td>
-            </tr>
+      <section className="card">
+        <div className="card-head">
+          <h2>Students below {thresholdPct}% <span className="count">({stats.chronic.length})</span></h2>
+          {stats.chronic.length > RISK_PREVIEW_ROWS && (
+            <button onClick={() => setChronicExpanded((v) => !v)} className="btn-small">
+              {chronicExpanded ? 'Show less' : 'Show all'}
+            </button>
           )}
-        </tbody>
-      </table>
-
-      <div className="section-divider">
-        <h4>Predicted Attendance Risk ({stats.perStudent.length} students)</h4>
-        <p className="subtext" style={{ marginBottom: 10 }}>
-          Forward-looking estimate based on each student's recent attendance trend.
-        </p>
-        <button onClick={handleLoadRiskScores} disabled={riskLoading} className="btn btn-small" style={{ marginBottom: 12 }}>
-          {riskLoading ? 'Scoring…' : 'Run Risk Prediction'}
-        </button>
-        {riskError && <p className="text-error">{riskError}</p>}
-        {riskRows.length > 0 && (
-          <>
-          <p className="subtext" style={{ marginBottom: 8 }}>
-            {riskCounts.HIGH} high, {riskCounts.MEDIUM} medium and {riskCounts.LOW} low risk. Highest risk first.
-          </p>
+        </div>
+        <div className="table-scroll">
           <table>
             <thead>
               <tr>
                 <th>Student</th>
-                <th>Current rate</th>
-                <th>Predicted risk</th>
-                <th>Why</th>
+                <th>Attendance rate</th>
+                <th style={{ textAlign: 'right' }}>Absences</th>
               </tr>
             </thead>
             <tbody>
-              {/* Only the top few until expanded, so a full class doesn't
-                  push the rest of the dashboard down. */}
-              {(riskExpanded ? riskRows : riskRows.slice(0, RISK_PREVIEW_ROWS))
-                .map((p) => {
-                  const risk = p.risk
-                  return (
-                    <tr key={p.student.id}>
-                      <td>{p.student.first_name} {p.student.last_name}</td>
-                      <td>{p.rate !== null ? `${Math.round(p.rate * 100)}%` : '—'}</td>
-                      <td>
-                        <span style={{
-                          fontSize: 11, padding: '2px 8px', borderRadius: 10,
-                          color: risk.risk_level === 'HIGH' ? '#c00' : risk.risk_level === 'MEDIUM' ? '#c80' : '#080',
-                          border: '1px solid currentColor',
-                        }}>
-                          {risk.risk_level}
-                        </span>
-                      </td>
-                      <td className="subtext" style={{ fontSize: 12 }}>{risk.reason}</td>
-                    </tr>
-                  )
-                })}
+              {(chronicExpanded ? stats.chronic : stats.chronic.slice(0, RISK_PREVIEW_ROWS)).map((c) => (
+                <tr key={c.student.id}>
+                  <td style={{ fontWeight: 600 }}>{c.student.first_name} {c.student.last_name}</td>
+                  <td>
+                    <span className={`pill ${c.rate < EXAM_ATTENDANCE_REQUIRED ? 'pill-red' : 'pill-amber'}`}>
+                      {Math.round(c.rate * 100)}%
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>{c.absent}</td>
+                </tr>
+              ))}
+              {stats.chronic.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="subtext">
+                    No students currently below the threshold.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
-          {riskRows.length > RISK_PREVIEW_ROWS && (
-            <button onClick={() => setRiskExpanded((v) => !v)} className="btn btn-small" style={{ marginTop: 8 }}>
-              {riskExpanded ? 'Show less' : `Show all ${riskRows.length} students`}
-            </button>
-          )}
-          </>
-        )}
-      </div>
-
-      <div className="section-divider">
-        <h4>Exam Eligibility</h4>
-        <p className="subtext" style={{ marginBottom: 10 }}>
-          A student who misses more than a third of school days (below {(EXAM_ATTENDANCE_REQUIRED * 100).toFixed(1)}%
-          attendance) cannot sit the exam. This projects each student's position by the exam date, counting
-          attendance from the start of term. Assumes school runs Monday to
-          Friday and does not skip public holidays.
-        </p>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
-          <span className="subtext">
-            Term started <strong>{termStart || 'not set'}</strong> · Exam date <strong>{examDate || 'not set'}</strong>
-          </span>
-          <button onClick={handleCheckEligibility} disabled={eligibilityLoading} className="btn btn-small">
-            {eligibilityLoading ? 'Checking…' : 'Check Exam Eligibility'}
-          </button>
         </div>
-        {eligibilityError && <p className="text-error">{eligibilityError}</p>}
-        {eligibility && (
-          <>
-            <p className="subtext" style={{ marginBottom: 8 }}>
-              {eligibility.remainingDays} school day{eligibility.remainingDays === 1 ? '' : 's'} left before the exam.{' '}
-              {eligibility.rows.filter((r) => r.status === 'INELIGIBLE').length} cannot reach the threshold,{' '}
-              {eligibility.rows.filter((r) => r.status === 'AT_RISK').length} at risk.
+        {stats.chronic.length > 0 && (
+          <p className="subtext" style={{ margin: '12px 0 0' }}>
+            Red is below the {(EXAM_ATTENDANCE_REQUIRED * 100).toFixed(1)}% exam line; amber is between that and {thresholdPct}%.
+          </p>
+        )}
+      </section>
+
+      <div className={`card-grid${showResultsFullWidth ? ' card-grid-stack' : ''}`}>
+        <section className="card">
+          <h2>Predicted attendance risk <span className="count">({stats.perStudent.length} students)</span></h2>
+          <p className="subtext" style={{ marginBottom: 14 }}>
+            Forward-looking estimate based on each student's recent attendance trend.
+          </p>
+          <button onClick={handleLoadRiskScores} disabled={riskLoading} className="btn-accent btn-small">
+            {riskLoading ? 'Scoring…' : 'Run Risk Prediction'}
+          </button>
+          {riskError && <p className="text-error">{riskError}</p>}
+          {riskRows.length > 0 && (
+            <>
+            <p className="subtext" style={{ margin: '16px 0 8px' }}>
+              {riskCounts.HIGH} high, {riskCounts.MEDIUM} medium and {riskCounts.LOW} low risk. Highest risk first.
             </p>
+            <div className="table-scroll">
             <table>
               <thead>
                 <tr>
                   <th>Student</th>
-                  <th>Attended so far</th>
-                  <th>Status</th>
-                  <th>What it means</th>
+                  <th>Current rate</th>
+                  <th>Predicted risk</th>
+                  <th>Why</th>
                 </tr>
               </thead>
               <tbody>
-                {[...eligibility.rows]
-                  .sort((a, b) => ELIGIBILITY_ORDER[a.status] - ELIGIBILITY_ORDER[b.status] || a.maxMoreAbsences - b.maxMoreAbsences)
-                  .slice(0, eligibilityExpanded ? undefined : RISK_PREVIEW_ROWS)
-                  .map((r) => {
-                    const label = ELIGIBILITY_LABELS[r.status]
+                {/* Only the top few until expanded, so a full class doesn't
+                    push the rest of the dashboard down. */}
+                {(riskExpanded ? riskRows : riskRows.slice(0, RISK_PREVIEW_ROWS))
+                  .map((p) => {
+                    const risk = p.risk
                     return (
-                      <tr key={r.student.id}>
-                        <td>{r.student.first_name} {r.student.last_name}</td>
-                        <td>{r.recorded > 0 ? `${r.attended}/${r.recorded} (${Math.round((r.attended / r.recorded) * 100)}%)` : '—'}</td>
+                      <tr key={p.student.id}>
+                        <td style={{ fontWeight: 600 }}>{p.student.first_name} {p.student.last_name}</td>
+                        <td>{p.rate !== null ? `${Math.round(p.rate * 100)}%` : '—'}</td>
                         <td>
-                          <span style={{
-                            fontSize: 11, padding: '2px 8px', borderRadius: 10,
-                            color: label.color, border: '1px solid currentColor',
-                          }}>
-                            {label.text}
+                          <span className={`pill ${RISK_TONES[risk.risk_level] || 'pill-gray'}`}>
+                            {risk.risk_level}
                           </span>
                         </td>
-                        <td className="subtext" style={{ fontSize: 12 }}>{describeEligibility(r)}</td>
+                        <td className="subtext" style={{ fontSize: 13 }}>{risk.reason}</td>
                       </tr>
                     )
                   })}
               </tbody>
             </table>
-            {eligibility.rows.length > RISK_PREVIEW_ROWS && (
-              <button onClick={() => setEligibilityExpanded((v) => !v)} className="btn btn-small" style={{ marginTop: 8 }}>
-                {eligibilityExpanded ? 'Show less' : `Show all ${eligibility.rows.length} students`}
+            </div>
+            {riskRows.length > RISK_PREVIEW_ROWS && (
+              <button onClick={() => setRiskExpanded((v) => !v)} className="btn-small" style={{ marginTop: 12 }}>
+                {riskExpanded ? 'Show less' : `Show all ${riskRows.length} students`}
               </button>
             )}
-          </>
-        )}
+            </>
+          )}
+        </section>
+
+        <section className="card">
+          <h2>Exam eligibility</h2>
+          <p className="subtext" style={{ marginBottom: 14 }}>
+            A student who misses more than a third of school days (below {(EXAM_ATTENDANCE_REQUIRED * 100).toFixed(1)}%
+            attendance) cannot sit the exam. This projects each student's position by the exam date, counting
+            attendance from the start of term. Assumes school runs Monday to
+            Friday and does not skip public holidays.
+          </p>
+          <button onClick={handleCheckEligibility} disabled={eligibilityLoading} className="btn-accent btn-small">
+            {eligibilityLoading ? 'Checking…' : 'Check Exam Eligibility'}
+          </button>
+          {eligibilityError && <p className="text-error">{eligibilityError}</p>}
+          {eligibility && (
+            <>
+              <p className="subtext" style={{ margin: '16px 0 8px' }}>
+                {eligibility.remainingDays} school day{eligibility.remainingDays === 1 ? '' : 's'} left before the exam.{' '}
+                {eligibility.rows.filter((r) => r.status === 'INELIGIBLE').length} cannot reach the threshold,{' '}
+                {eligibility.rows.filter((r) => r.status === 'AT_RISK').length} at risk.
+              </p>
+              <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Attended so far</th>
+                    <th>Status</th>
+                    <th>What it means</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...eligibility.rows]
+                    .sort((a, b) => ELIGIBILITY_ORDER[a.status] - ELIGIBILITY_ORDER[b.status] || a.maxMoreAbsences - b.maxMoreAbsences)
+                    .slice(0, eligibilityExpanded ? undefined : RISK_PREVIEW_ROWS)
+                    .map((r) => {
+                      const label = ELIGIBILITY_LABELS[r.status]
+                      return (
+                        <tr key={r.student.id}>
+                          <td style={{ fontWeight: 600 }}>{r.student.first_name} {r.student.last_name}</td>
+                          <td>{r.recorded > 0 ? `${r.attended}/${r.recorded} (${Math.round((r.attended / r.recorded) * 100)}%)` : '—'}</td>
+                          <td>
+                            <span className={`pill ${label.tone}`}>{label.text}</span>
+                          </td>
+                          <td className="subtext" style={{ fontSize: 13 }}>{describeEligibility(r)}</td>
+                        </tr>
+                      )
+                    })}
+                </tbody>
+              </table>
+              </div>
+              {eligibility.rows.length > RISK_PREVIEW_ROWS && (
+                <button onClick={() => setEligibilityExpanded((v) => !v)} className="btn-small" style={{ marginTop: 12 }}>
+                  {eligibilityExpanded ? 'Show less' : `Show all ${eligibility.rows.length} students`}
+                </button>
+              )}
+            </>
+          )}
+        </section>
       </div>
-    </div>
+    </AppShell>
   )
 }

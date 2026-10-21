@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
-import { signOut } from 'aws-amplify/auth'
 import { getCurrentUserContext } from '../lib/auth'
 import { getChronicThreshold, defaultDateRange } from '../lib/settings'
 import { EXAM_ATTENDANCE_REQUIRED } from '../lib/examEligibility'
 import { SCHOOLS, NETWORK_SCHOOL_ID, schoolName } from '../lib/schools'
 import SchoolAdmins from '../components/SchoolAdmins'
+import AppShell, { Ring } from '../components/AppShell'
+import { greetingFor } from '../lib/display'
 
 const client = generateClient()
 
@@ -167,90 +168,101 @@ export default function Network() {
   const examPct = Math.round(EXAM_ATTENDANCE_REQUIRED * 100)
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <h2>Angaza Network Overview</h2>
-        <div className="button-group">
-          <button onClick={async () => { await signOut(); navigate('/login') }} className="btn btn-small">
-            Sign Out
-          </button>
-        </div>
-      </div>
+    <AppShell
+      nav={[{ to: '/network', label: 'Network overview', icon: 'network' }]}
+      user={{ name: 'Angaza team', role: 'Network admin' }}
+    >
+      <p className="eyebrow">Angaza network overview · {Object.keys(SCHOOLS).length} schools</p>
 
-      <div className="button-group" style={{ alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-        <label className="subtext">
-          From{' '}
-          <input
-            type="date"
-            value={startDate}
-            max={endDate}
-            onChange={(e) => e.target.value && setDateRange({ startDate: e.target.value, endDate })}
-          />
-        </label>
-        <label className="subtext">
-          To{' '}
-          <input
-            type="date"
-            value={endDate}
-            min={startDate}
-            onChange={(e) => e.target.value && setDateRange({ startDate, endDate: e.target.value })}
-          />
-        </label>
-      </div>
+      <section className="card hero">
+        <Ring value={stats ? stats.total.rate : null} caption="network average" />
+        <div className="hero-body">
+          <h1>{greetingFor()}, Angaza team</h1>
+          <p>
+            {stats
+              ? `${stats.total.students} students in ${stats.total.classes} classes across ${stats.schools.length} schools. ${stats.total.belowWarning} are below ${warningPct}%.`
+              : 'Attendance across every school in the network.'}
+          </p>
+          <div className="filters">
+            <label className="filter">
+              From
+              <input
+                type="date"
+                value={startDate}
+                max={endDate}
+                onChange={(e) => e.target.value && setDateRange({ startDate: e.target.value, endDate })}
+              />
+            </label>
+            <label className="filter">
+              To
+              <input
+                type="date"
+                value={endDate}
+                min={startDate}
+                onChange={(e) => e.target.value && setDateRange({ startDate, endDate: e.target.value })}
+              />
+            </label>
+          </div>
+        </div>
+      </section>
 
       {loading && <p className="subtext">Loading every school…</p>}
       {error && <p className="text-error">{error}</p>}
 
       {!loading && !error && stats && (
         <>
-          <div className="card-row">
-            <div className="card">
-              <h4>Schools</h4>
-              <p className="big-stat">{stats.schools.length}</p>
-              <p className="subtext">{stats.total.classes} classes, {stats.total.students} students</p>
+          <div className="stat-grid">
+            <div className="stat">
+              <span className="stat-value">{stats.schools.length}</span>
+              <span className="stat-label">Schools</span>
+              <span className="subtext">{stats.total.classes} classes, {stats.total.students} students</span>
             </div>
-            <div className="card">
-              <h4>Network attendance</h4>
-              <p className="big-stat">{pct(stats.total.rate)}</p>
-              <p className="subtext">Average over selected range</p>
+            <div className="stat">
+              <span className="stat-value">{pct(stats.total.rate)}</span>
+              <span className="stat-label">Network attendance</span>
+              <span className="subtext">Average over selected range</span>
             </div>
-            <div className="card">
-              <h4>Below {warningPct}%</h4>
-              <p className="big-stat">{stats.total.belowWarning}</p>
-              <p className="subtext">{stats.total.belowExam} of them below the {examPct}% exam line</p>
+            <div className="stat">
+              <span className="stat-value">{stats.total.belowWarning}</span>
+              <span className="stat-label">Below {warningPct}%</span>
+              <span className="subtext">{stats.total.belowExam} of them below the {examPct}% exam line</span>
             </div>
           </div>
 
-          <h4>Schools</h4>
-          <p className="subtext">Select a school to see its classes.</p>
-          <table>
-            <thead>
-              <tr>
-                <th>School</th>
-                <th>County</th>
-                <th>Classes</th>
-                <th>Students</th>
-                <th>Attendance</th>
-                <th>Below {warningPct}%</th>
-                <th>Below {examPct}%</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.schools.map((s) => (
-                <SchoolRows
-                  key={s.id}
-                  school={s}
-                  open={openSchool === s.id}
-                  onToggle={() => setOpenSchool(openSchool === s.id ? null : s.id)}
-                />
-              ))}
-            </tbody>
-          </table>
+          <section className="card">
+            <h2>Schools</h2>
+            <p className="subtext">Select a school to see its classes.</p>
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>School</th>
+                    <th>County</th>
+                    <th>Classes</th>
+                    <th>Students</th>
+                    <th>Attendance</th>
+                    <th>Below {warningPct}%</th>
+                    <th>Below {examPct}%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.schools.map((s) => (
+                    <SchoolRows
+                      key={s.id}
+                      school={s}
+                      open={openSchool === s.id}
+                      onToggle={() => setOpenSchool(openSchool === s.id ? null : s.id)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </>
       )}
 
       {allowed && <SchoolAdmins />}
-    </div>
+    </AppShell>
   )
 }
 

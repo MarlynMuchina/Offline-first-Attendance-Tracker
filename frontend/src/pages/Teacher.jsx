@@ -6,6 +6,9 @@ import { db } from '../lib/db'
 import { startSyncEngine, syncPendingAttendance, stopSyncEngine } from '../lib/syncEngine'
 import { getQueueHealth } from '../lib/storageQuotaManager'
 import { getCurrentUserContext, getClassesForCurrentTeacher } from '../lib/auth'
+import { schoolName } from '../lib/schools'
+import { greetingFor } from '../lib/display'
+import AppShell, { Ring, LoadingScreen } from '../components/AppShell'
 
 const client = generateClient()
 
@@ -48,6 +51,12 @@ const updateStudentClassMutation = /* GraphQL */ `
 `
 
 const today = () => new Date().toISOString().split('T')[0]
+
+const MARK_OPTIONS = [
+  { status: 'PRESENT', label: 'Present' },
+  { status: 'ABSENT', label: 'Absent' },
+  { status: 'LATE', label: 'Late' },
+]
 
 export default function Teacher() {
   const navigate = useNavigate()
@@ -264,20 +273,20 @@ export default function Teacher() {
   }
 
   if (loading) {
-    return <div style={{ textAlign: 'center', marginTop: 80 }}>Loading roster…</div>
+    return <LoadingScreen message="Loading your class…" />
   }
 
   if (contextError) {
     return (
-      <div style={{ textAlign: 'center', marginTop: 80 }}>
+      <div className="state-screen">
         <h3>Couldn't load your class</h3>
-        <p style={{ color: 'red' }}>{contextError}</p>
+        <p className="text-error">{contextError}</p>
         <button
           onClick={async () => {
             await signOut()
             navigate('/login')
           }}
-          style={{ padding: '8px 16px', marginTop: 12 }}
+          className="btn"
         >
           Sign Out
         </button>
@@ -285,153 +294,181 @@ export default function Teacher() {
     )
   }
 
-
-
   const syncedCount = queueRecords.filter((r) => r.sync_status === 'SYNCED').length
+  const waitingCount = queueRecords.filter((r) => r.sync_status !== 'SYNCED').length
+  const failedCount = queueRecords.filter((r) => r.sync_status === 'FAILED').length
+  const markedCount = students.filter((s) => queueRecords.some((r) => r.student_id === s.id)).length
+  const className = myClasses.find((c) => c.id === classId)?.name || ''
 
   return (
-    <div style={{ maxWidth: 700, margin: '40px auto', fontFamily: 'sans-serif' }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-  <div>
-    <h2 style={{ marginBottom: 2 }}>Welcome, {teacherName}</h2>
-    <p style={{ fontSize: 13, color: '#888', margin: 0 }}>
-      {myClasses.find((c) => c.id === classId)?.name || ''} — {schoolId}
-    </p>
-  </div>
-  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-    <span
-      style={{
-        fontSize: 12,
-        border: '1px solid #999',
-        borderRadius: 12,
-        padding: '4px 10px',
-        color: isOnline ? 'green' : '#c00',
-      }}
+    <AppShell
+      nav={[
+        { href: '#register', label: 'Mark attendance', icon: 'register', active: true },
+        { href: '#add-students', label: 'Add students', icon: 'addStudent' },
+      ]}
+      user={{ name: teacherName || 'Teacher', role: `Teacher · ${schoolName(schoolId)}` }}
+      status={`${syncedCount}/${students.length} synced`}
     >
-      {isOnline ? '● Online' : '○ Offline'} — {syncedCount}/{students.length} synced
-    </span>
-    <button
-       onClick={async () => {
-       await signOut()
-       navigate('/login')
-     }}
-     style={{ fontSize: 12, padding: '4px 10px' }}
-     >
-     Sign Out
-   </button>
-  </div>
-</div>
-      {myClasses.length > 1 && (
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ fontSize: 13, marginRight: 8 }}>Viewing class:</label>
-          <select
-            value={classId}
-            onChange={async (e) => {
-              const newClassId = e.target.value
-              setClassId(newClassId)
-              classIdRef.current = newClassId
-              await loadStudents(newClassId)
-              await loadQueue(newClassId)
-              await loadAvailableStudents(schoolId, newClassId)
-            }}
-            style={{ padding: 6 }}
-          >
-            {myClasses.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
-      )}
+      <p className="eyebrow">
+        {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+      </p>
+
       {storageWarning && (
-        <div style={{
-          marginBottom: 16, padding: '10px 14px', border: '1px solid #c80',
-          borderRadius: 6, background: '#fff8ec', fontSize: 13, color: '#8a5a00',
-        }}>
-          ⚠ Device storage is nearly full and {storageWarning.unsyncedCount} record(s) haven't synced yet.
-          These records are safe and won't be deleted, but please connect to the internet soon to free up space.
+        <div className="notice">
+          <span>
+            ⚠ Device storage is nearly full and {storageWarning.unsyncedCount} record(s) haven't synced yet.
+            These records are safe and won't be deleted, but please connect to the internet soon to free up space.
+          </span>
         </div>
       )}
 
-      <button onClick={markAllPresent} style={{ marginBottom: 16, padding: '6px 12px' }}>
-        Mark All Present
-      </button>
-      <button
-        onClick={handleManualSync}
-        disabled={syncing || !isOnline}
-        style={{ marginBottom: 16, marginLeft: 8, padding: '6px 12px' }}
-        >
-       {syncing ? 'Syncing…' : 'Sync Now'}
-      </button>
+      <div className="hero-row">
+        <section className="card hero">
+          <Ring
+            value={students.length ? markedCount / students.length : 0}
+            label={`${markedCount}/${students.length}`}
+            caption="marked today"
+            size={150}
+          />
+          <div className="hero-body">
+            <h1>{greetingFor()}{teacherName ? `, ${teacherName.split(' ')[0]}` : ''}</h1>
+            <p>
+              {className}, {schoolName(schoolId)}. Today's register saves on this device first and is sent
+              as soon as you're online.
+            </p>
+            {myClasses.length > 1 && (
+              <div className="filters">
+                <label className="filter">
+                  Viewing class
+                  <select
+                    value={classId}
+                    onChange={async (e) => {
+                      const newClassId = e.target.value
+                      setClassId(newClassId)
+                      classIdRef.current = newClassId
+                      await loadStudents(newClassId)
+                      await loadQueue(newClassId)
+                      await loadAvailableStudents(schoolId, newClassId)
+                    }}
+                  >
+                    {myClasses.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
+          </div>
+        </section>
 
-      
+        <section className="card card-dark" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <h2 style={{ margin: 0 }}>Sync status</h2>
+          <div className="info-rows">
+            <div className="info-row"><span>Synced</span><strong>{syncedCount}</strong></div>
+            <div className="info-row"><span>Waiting on this device</span><strong>{waitingCount}</strong></div>
+            {failedCount > 0 && (
+              <div className="info-row"><span>Failed, will retry</span><strong>{failedCount}</strong></div>
+            )}
+            <div className="info-row"><span>Not marked yet</span><strong>{students.length - markedCount}</strong></div>
+          </div>
+          <button
+            onClick={handleManualSync}
+            disabled={syncing || !isOnline}
+            className="btn btn-accent"
+            style={{ marginTop: 'auto' }}
+          >
+            {syncing ? 'Syncing…' : 'Sync Now'}
+          </button>
+        </section>
+      </div>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
-            <th>Student</th>
-            <th>Present</th>
-            <th>Absent</th>
-            <th>Late</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {students.length === 0 && (
-            <tr>
-              <td colSpan={5} style={{ padding: '12px 0', color: '#999', fontSize: 13 }}>
-                No students in this class yet — add some below.
-              </td>
-            </tr>
-          )}
-          {students.map((s) => {
-            
-            const record = queueRecords.find((r) => r.student_id === s.id)
-            return (
-              <tr key={s.id} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: '8px 0' }}>{s.first_name} {s.last_name}</td>
-                {['PRESENT', 'ABSENT', 'LATE'].map((status) => (
-                  <td key={status}>
-                    <input
-                      type="radio"
-                      name={s.id}
-                      checked={record?.status === status}
-                      onChange={() => markStatus(s.id, status)}
-                    />
-                  </td>
-                ))}
-                <td style={{ fontSize: 12 }}>
-                  {!record && <span style={{ color: '#999' }}>Not marked</span>}
-                  {record?.sync_status === 'PENDING' && <span style={{ color: '#c80' }}>Queued</span>}
-                  {record?.sync_status === 'SYNCING' && <span style={{ color: '#888' }}>Syncing…</span>}
-                  {record?.sync_status === 'SYNCED' && <span style={{ color: 'green' }}>Synced</span>}
-                  {record?.sync_status === 'FAILED' && <span style={{ color: 'red' }}>Failed — will retry</span>}
-                </td>
+      <section className="card" id="register">
+        <div className="card-head">
+          <h2>Today's register <span className="count">({students.length} student{students.length === 1 ? '' : 's'})</span></h2>
+          <button onClick={markAllPresent} className="btn-small" disabled={students.length === 0}>
+            Mark All Present
+          </button>
+        </div>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Present · Absent · Late</th>
+                <th style={{ textAlign: 'right' }}>Status</th>
               </tr>
-            )
-          })}
-        </tbody>
-      </table>
+            </thead>
+            <tbody>
+              {students.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="subtext">
+                    No students in this class yet — add some below.
+                  </td>
+                </tr>
+              )}
+              {students.map((s) => {
+                const record = queueRecords.find((r) => r.student_id === s.id)
+                const studentName = `${s.first_name} ${s.last_name}`
+                return (
+                  <tr key={s.id}>
+                    <td style={{ fontWeight: 600 }}>{studentName}</td>
+                    <td>
+                      <div className="mark-group" role="radiogroup" aria-label={`Attendance for ${studentName}`}>
+                        {MARK_OPTIONS.map(({ status, label }) => (
+                          <label
+                            key={status}
+                            className={`mark mark-${status.toLowerCase()}${record?.status === status ? ' is-on' : ''}`}
+                          >
+                            <input
+                              type="radio"
+                              name={s.id}
+                              checked={record?.status === status}
+                              onChange={() => markStatus(s.id, status)}
+                            />
+                            {label}
+                          </label>
+                        ))}
+                      </div>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      {!record && <span className="pill pill-gray">Not marked</span>}
+                      {record?.sync_status === 'PENDING' && <span className="pill pill-amber">Queued</span>}
+                      {record?.sync_status === 'SYNCING' && <span className="pill pill-gray">Syncing…</span>}
+                      {record?.sync_status === 'SYNCED' && <span className="pill pill-green">Synced</span>}
+                      {record?.sync_status === 'FAILED' && <span className="pill pill-red">Failed — will retry</span>}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
-      <div style={{ marginTop: 24, borderTop: '1px solid #ddd', paddingTop: 16 }}>
-        <h3 style={{ fontSize: 16 }}>Add Existing Students to My Class</h3>
-        {availableLoading && <p style={{ fontSize: 13, color: '#999' }}>Loading…</p>}
-        {availableError && <p style={{ color: 'red', fontSize: 13 }}>{availableError}</p>}
+      <section className="card" id="add-students">
+        <h2>Add existing students to my class</h2>
+        <p className="subtext">Students in your school who are not in any class yet.</p>
+        {availableLoading && <p className="subtext">Loading…</p>}
+        {availableError && <p className="text-error">{availableError}</p>}
         {!availableLoading && availableStudents.length === 0 && (
-          <p style={{ fontSize: 13, color: '#999' }}>No other students in this school to add.</p>
+          <p className="subtext">No other students in this school to add.</p>
         )}
         {availableStudents.map((s) => (
-          <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
+          <div
+            key={s.id}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '1px solid var(--sand)' }}
+          >
             <span>{s.first_name} {s.last_name}</span>
             <button
               onClick={() => handleAddExistingStudent(s.id)}
               disabled={addingStudentId === s.id}
-              style={{ fontSize: 12, padding: '4px 10px' }}
+              className="btn-small"
             >
               {addingStudentId === s.id ? 'Adding…' : 'Add to my class'}
             </button>
           </div>
         ))}
-      </div>
-    </div>
+      </section>
+    </AppShell>
   )
 }
