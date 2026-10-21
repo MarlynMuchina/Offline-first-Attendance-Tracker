@@ -170,6 +170,40 @@ describe('syncPendingAttendance', () => {
     expect(mockAttendanceQueue.update).toHaveBeenCalledWith(6, { sync_status: 'SYNCED', remote_id: 'remote-6' })
   })
 
+  test('sends up to 4 records at once and syncs every one of them', async () => {
+    const records = Array.from({ length: 10 }, (_, i) => ({
+      localId: 100 + i,
+      student_id: `s${i}`,
+      class_id: 'c1',
+      date: '2026-09-05',
+      status: 'PRESENT',
+      marked_at: 'x',
+      client_request_id: `r${i}`,
+      sync_status: 'PENDING',
+    }))
+    mockAttendanceQueue.where.mockReturnValue(makeQueueChain(records))
+    let inFlight = 0
+    let maxInFlight = 0
+    mockGraphql.mockImplementation(async ({ variables }) => {
+      inFlight++
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      inFlight--
+      return { data: { markAttendance: { id: `remote-${variables.input.student_id}` } } }
+    })
+
+    await syncPendingAttendance()
+
+    expect(mockGraphql).toHaveBeenCalledTimes(10)
+    expect(maxInFlight).toBe(4)
+    for (const r of records) {
+      expect(mockAttendanceQueue.update).toHaveBeenCalledWith(r.localId, {
+        sync_status: 'SYNCED',
+        remote_id: `remote-${r.student_id}`,
+      })
+    }
+  })
+
   test('runs storage maintenance after every online sync attempt', async () => {
     mockAttendanceQueue.where.mockReturnValue(makeQueueChain([]))
 

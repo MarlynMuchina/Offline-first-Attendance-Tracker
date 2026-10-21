@@ -169,10 +169,17 @@ export default function Teacher() {
         })
       }, 10000)
 
+      // Reading the local queue is cheap, so the status column follows a
+      // sync as each record lands instead of only when the whole batch ends.
+      const statusInterval = setInterval(() => {
+        if (classIdRef.current) loadQueue(classIdRef.current)
+      }, 2000)
+
       return () => {
         window.removeEventListener('online', handleOnline)
         window.removeEventListener('offline', handleOffline)
         clearInterval(interval)
+        clearInterval(statusInterval)
         stopSyncEngine()
       }
     }
