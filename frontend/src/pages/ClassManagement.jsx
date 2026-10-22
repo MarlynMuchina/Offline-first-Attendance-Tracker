@@ -3,6 +3,7 @@ import { generateClient } from 'aws-amplify/api'
 import { schoolName } from '../lib/schools'
 import AppShell, { ADMIN_NAV } from '../components/AppShell'
 import { getCurrentUserContext } from '../lib/auth'
+import { NEEDS_INTERNET } from '../lib/network'
 import { SMS_PREFERENCES, DEFAULT_SMS_PREFERENCE } from '../lib/smsPreference'
 
 const client = generateClient()
@@ -264,6 +265,7 @@ export default function ClassManagement() {
   useEffect(() => {
     async function resolveAndLoad() {
       try {
+        if (!navigator.onLine) throw new Error(NEEDS_INTERNET)
         const { schoolId: sid } = await getCurrentUserContext()
         setSchoolId(sid)
         await Promise.all([loadTeachers(sid), loadClasses(sid), loadAllStudents(sid)])

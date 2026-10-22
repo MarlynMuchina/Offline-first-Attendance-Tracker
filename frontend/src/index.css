@@ -1,3 +1,13 @@
+/* Outfit (SIL Open Font License), bundled with the app so pages never wait
+   on Google Fonts and look the same offline. */
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('./assets/fonts/outfit-latin.woff2') format('woff2');
+}
+
 :root {
   --green: #1F4D3A;
   --green-2: #2F6A51;
@@ -296,6 +306,18 @@ button:disabled {
   color: #5A4A2A;
   font-size: 13px;
   line-height: 1.5;
+}
+
+.signed-in-box {
+  display: grid;
+  gap: 12px;
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.signed-in-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .section-divider {
