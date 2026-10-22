@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
-import { getCurrentUser, signOut } from 'aws-amplify/auth'
+import { signOut } from 'aws-amplify/auth'
 import { db } from '../lib/db'
 import { startSyncEngine, syncPendingAttendance, stopSyncEngine } from '../lib/syncEngine'
 import { getQueueHealth } from '../lib/storageQuotaManager'
-import { getCurrentUserContext, getClassesForCurrentTeacher } from '../lib/auth'
+import { getCurrentUserContext } from '../lib/auth'
+import { loadTeacherClasses } from '../lib/teacherClasses'
+import { fromServer } from '../lib/network'
 import { schoolName } from '../lib/schools'
-import { greetingFor } from '../lib/display'
+import { greetingFor, formatDay } from '../lib/display'
 import AppShell, { Ring, LoadingScreen } from '../components/AppShell'
 
 const client = generateClient()
@@ -69,6 +71,7 @@ export default function Teacher() {
   const [syncing, setSyncing] = useState(false)
   const [storageWarning, setStorageWarning] = useState(null)
   const [contextError, setContextError] = useState('')
+  const [classesSavedAt, setClassesSavedAt] = useState(null)
   const classIdRef = useRef(null)
 
   const [teacherName, setTeacherName] = useState('')
@@ -84,17 +87,25 @@ export default function Teacher() {
       // The class filter runs after DynamoDB reads each page, so a page can
       // come back short or empty while more matches remain. Follow nextToken
       // until the whole roster is in.
-      let fresh = []
-      let nextToken = null
-      do {
-        const res = await client.graphql({
-          query: listStudentsQuery,
-          variables: { classId: resolvedClassId, nextToken },
-        })
-        fresh = fresh.concat(res.data.listStudents.items)
-        nextToken = res.data.listStudents.nextToken
-      } while (nextToken)
-      await db.students.bulkPut(fresh)
+      const fresh = await fromServer(async () => {
+        let items = []
+        let nextToken = null
+        do {
+          const res = await client.graphql({
+            query: listStudentsQuery,
+            variables: { classId: resolvedClassId, nextToken },
+          })
+          items = items.concat(res.data.listStudents.items)
+          nextToken = res.data.listStudents.nextToken
+        } while (nextToken)
+        return items
+      }, 15000)
+      // Replace this class's saved roster, so a student moved out of the
+      // class doesn't stay on the offline register.
+      await db.transaction('rw', db.students, async () => {
+        await db.students.where('class_id').equals(resolvedClassId).delete()
+        await db.students.bulkPut(fresh)
+      })
       setStudents(fresh)
     } catch (err) {
       console.warn('Could not fetch roster from server, using local cache:', err.message)
@@ -113,6 +124,10 @@ export default function Teacher() {
   }, [])
 
   const loadAvailableStudents = useCallback(async (resolvedSchoolId, resolvedClassId) => {
+    if (!navigator.onLine) {
+      setAvailableError('Adding students needs internet. Marking the register works offline.')
+      return
+    }
     setAvailableLoading(true)
     setAvailableError('')
     try {
@@ -132,7 +147,11 @@ export default function Teacher() {
       setAvailableStudents(items.filter((s) => !s.class_id && s.status !== 'INACTIVE'))
     } catch (err) {
       console.error('Failed to load available students:', err)
-      setAvailableError(err.message || 'Failed to load students')
+      setAvailableError(
+        navigator.onLine
+          ? err.message || 'Failed to load students'
+          : 'Adding students needs internet. Marking the register works offline.'
+      )
     } finally {
       setAvailableLoading(false)
     }
@@ -144,7 +163,8 @@ export default function Teacher() {
       try {
         const { schoolId: sid, userId } = await getCurrentUserContext()
         setSchoolId(sid)
-        const { teacherName: name, classes } = await getClassesForCurrentTeacher(userId)
+        const { teacherName: name, classes, savedAt } = await loadTeacherClasses(userId)
+        setClassesSavedAt(savedAt)
         setTeacherName(name)
         setMyClasses(classes)
         const resolvedClassId = classes[0].id
@@ -155,7 +175,11 @@ export default function Teacher() {
         await loadAvailableStudents(sid, resolvedClassId)
       } catch (err) {
         console.error('Failed to resolve school/class context:', err)
-        setContextError(err.message)
+        setContextError(
+          navigator.onLine
+            ? err.message
+            : "You're offline and this device hasn't saved your class yet. Open this page once with internet, then it works offline."
+        )
       } finally {
         setLoading(false)
       }
@@ -199,10 +223,11 @@ export default function Teacher() {
     const markedAt = new Date().toISOString()
     let userId = 'unknown'
     try {
-      const user = await getCurrentUser()
-      userId = user.userId
+      // Uses the saved sign-in offline. getCurrentUser would try to refresh
+      // an expired token, which can hang without internet.
+      userId = (await getCurrentUserContext()).userId
     } catch {
-      // offline or session expired — still record locally, sync later
+      // no sign-in at all: still record locally, sync later
     }
 
     // If today's record for this student already exists in the queue, update it in place.
@@ -312,6 +337,15 @@ export default function Teacher() {
       <p className="eyebrow">
         {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
       </p>
+
+      {classesSavedAt && (
+        <div className="notice">
+          <span>
+            Showing your class as saved on this device on {formatDay(classesSavedAt.slice(0, 10))}. Marks are kept
+            here and sync by themselves once you're back online.
+          </span>
+        </div>
+      )}
 
       {storageWarning && (
         <div className="notice">

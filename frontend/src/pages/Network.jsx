@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { generateClient } from 'aws-amplify/api'
 import { getCurrentUserContext } from '../lib/auth'
+import { NEEDS_INTERNET } from '../lib/network'
 import { getChronicThreshold, defaultDateRange } from '../lib/settings'
 import { EXAM_ATTENDANCE_REQUIRED } from '../lib/examEligibility'
 import { SCHOOLS, NETWORK_SCHOOL_ID, schoolName } from '../lib/schools'
@@ -143,6 +144,11 @@ export default function Network() {
 
   const loadData = useCallback(async () => {
     if (!allowed) return
+    if (!navigator.onLine) {
+      setError(NEEDS_INTERNET)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError('')
     try {
@@ -261,7 +267,7 @@ export default function Network() {
         </>
       )}
 
-      {allowed && <SchoolAdmins />}
+      {allowed && navigator.onLine && <SchoolAdmins />}
     </AppShell>
   )
 }

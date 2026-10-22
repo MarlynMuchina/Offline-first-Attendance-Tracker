@@ -1,18 +1,18 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { signIn, confirmSignIn, signOut, fetchAuthSession } from 'aws-amplify/auth'
+import { signIn, confirmSignIn, signOut } from 'aws-amplify/auth'
+import { getSignedInSession } from '../lib/auth'
 import { NETWORK_SCHOOL_ID } from '../lib/schools'
 import { greetingFor } from '../lib/display'
 import { BrandMark } from '../components/AppShell'
 
 // Sends Angaza staff to the network view, admins and head teachers to the
-// dashboard and everyone else to the register, based on the fresh ID token.
+// dashboard and everyone else to the register, based on the ID token (or the
+// sign-in saved on this device when offline).
 async function homePathForCurrentUser() {
-  const session = await fetchAuthSession()
-  const payload = session.tokens?.idToken?.payload || {}
-  const groups = payload['cognito:groups'] || []
+  const { groups, schoolId } = await getSignedInSession()
   const isAdmin = groups.some((g) => g === 'Admin' || g === 'HeadTeacher')
-  if (isAdmin && payload['custom:school_id'] === NETWORK_SCHOOL_ID) return '/network'
+  if (isAdmin && schoolId === NETWORK_SCHOOL_ID) return '/network'
   return isAdmin ? '/admin' : '/teacher'
 }
 
@@ -22,11 +22,27 @@ export default function Login() {
   const [newPassword, setNewPassword] = useState('')
   const [error, setError] = useState('')
   const [needsNewPassword, setNeedsNewPassword] = useState(false)
+  // Where to go if someone is still signed in on this device. The installed
+  // app opens on this page, so this is how a teacher gets back to the
+  // register without internet.
+  const [continuePath, setContinuePath] = useState(null)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    homePathForCurrentUser().then(setContinuePath).catch(() => setContinuePath(null))
+  }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
+    if (!navigator.onLine) {
+      setError(
+        continuePath
+          ? "You're offline, but you're still signed in on this device. Press Continue above."
+          : "You're offline. Signing in for the first time on a device needs internet."
+      )
+      return
+    }
     try {
       const { isSignedIn, nextStep } = await signIn({ username: phone, password })
 
@@ -137,6 +153,29 @@ export default function Login() {
             <h2>{greetingFor()}</h2>
             <p className="subtext" style={{ margin: '4px 0 0' }}>Sign in to Student Attendance Tracker</p>
           </div>
+          {continuePath && (
+            <div className="notice-box signed-in-box">
+              <div>
+                <strong>You're still signed in on this device</strong>
+                <p style={{ margin: '6px 0 0' }}>Continue to your page. This works without internet too.</p>
+              </div>
+              <div className="signed-in-actions">
+                <button type="button" onClick={() => navigate(continuePath)} className="btn btn-primary">
+                  Continue
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await signOut()
+                    setContinuePath(null)
+                  }}
+                  className="btn"
+                >
+                  Sign out
+                </button>
+              </div>
+            </div>
+          )}
           <form onSubmit={handleSubmit}>
             <div>
               <label className="field-label" htmlFor="phone">Phone number</label>

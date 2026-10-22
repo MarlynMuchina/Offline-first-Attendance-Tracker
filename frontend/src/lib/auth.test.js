@@ -10,13 +10,101 @@ jest.unstable_mockModule('aws-amplify/api', () => ({
   generateClient: () => ({ graphql: mockGraphql }),
 }))
 
-const { getCurrentUserContext, getClassesForSchool, getClassesForCurrentTeacher } = await import('./auth.js')
+const { getSignedInSession, getCurrentUserContext, getClassesForSchool, getClassesForCurrentTeacher } =
+  await import('./auth.js')
 
 // One page of a list query, as AppSync returns it
 const page = (field, items, nextToken = null) => ({ data: { [field]: { items, nextToken } } })
 
+const setOnline = (value) =>
+  Object.defineProperty(globalThis.navigator, 'onLine', { value, configurable: true })
+
+afterEach(() => {
+  jest.useRealTimers()
+})
+
 beforeEach(() => {
   jest.clearAllMocks()
+  setOnline(true)
+  // Node has no localStorage, so give each test a fresh in-memory one
+  const store = new Map()
+  global.localStorage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+  }
+})
+
+const teacherTokens = {
+  tokens: {
+    idToken: {
+      payload: { 'cognito:groups': ['Teacher'], 'custom:school_id': 'SCH01', sub: 'u1', phone_number: '+254700000001' },
+    },
+  },
+}
+
+describe('getSignedInSession', () => {
+  test('reads the groups and school, and saves them for offline use', async () => {
+    mockFetchAuthSession.mockResolvedValue(teacherTokens)
+    await expect(getSignedInSession({ forceRefresh: true })).resolves.toEqual({
+      groups: ['Teacher'],
+      schoolId: 'SCH01',
+      userId: 'u1',
+      phoneNumber: '+254700000001',
+      savedCopy: false,
+    })
+    expect(mockFetchAuthSession).toHaveBeenCalledWith({ forceRefresh: true })
+  })
+
+  test('uses the saved sign-in when the tokens cannot be refreshed offline', async () => {
+    mockFetchAuthSession.mockResolvedValueOnce(teacherTokens)
+    await getSignedInSession()
+
+    mockFetchAuthSession.mockRejectedValueOnce(new Error('Network error'))
+    await expect(getSignedInSession()).resolves.toMatchObject({
+      groups: ['Teacher'],
+      schoolId: 'SCH01',
+      userId: 'u1',
+      savedCopy: true,
+    })
+  })
+
+  test('offline: uses the saved sign-in without asking Amplify', async () => {
+    mockFetchAuthSession.mockResolvedValueOnce(teacherTokens)
+    await getSignedInSession()
+
+    setOnline(false)
+    await expect(getSignedInSession()).resolves.toMatchObject({ userId: 'u1', savedCopy: true })
+    expect(mockFetchAuthSession).toHaveBeenCalledTimes(1)
+  })
+
+  test('uses the saved sign-in when a refresh hangs on a connection with no internet', async () => {
+    mockFetchAuthSession.mockResolvedValueOnce(teacherTokens)
+    await getSignedInSession()
+
+    jest.useFakeTimers()
+    mockFetchAuthSession.mockReturnValueOnce(new Promise(() => {}))
+    const pending = getSignedInSession()
+    await jest.advanceTimersByTimeAsync(10000)
+    await expect(pending).resolves.toMatchObject({ userId: 'u1', savedCopy: true })
+  })
+
+  test('offline with no saved sign-in: the error comes through', async () => {
+    mockFetchAuthSession.mockRejectedValue(new Error('Network error'))
+    await expect(getSignedInSession()).rejects.toThrow('Network error')
+  })
+
+  test('a signed-out device is not let in, even with a saved sign-in', async () => {
+    mockFetchAuthSession.mockResolvedValueOnce(teacherTokens)
+    await getSignedInSession()
+    mockFetchAuthSession.mockResolvedValueOnce({ tokens: undefined })
+    await expect(getSignedInSession()).rejects.toThrow('No active session')
+  })
+
+  test('accounts with no groups get an empty list', async () => {
+    mockFetchAuthSession.mockResolvedValue({ tokens: { idToken: { payload: { sub: 'u2' } } } })
+    await expect(getSignedInSession()).resolves.toMatchObject({ groups: [], userId: 'u2' })
+  })
 })
 
 describe('getCurrentUserContext', () => {
@@ -78,13 +166,13 @@ describe('getClassesForCurrentTeacher', () => {
 
   test('fails when no teacher record is linked to the login', async () => {
     mockGraphql.mockResolvedValueOnce(page('listTeachers', []))
-    await expect(getClassesForCurrentTeacher('sub-x')).rejects.toThrow('No teacher record is linked')
+    await expect(getClassesForCurrentTeacher('sub-x')).rejects.toMatchObject({ notAssigned: true, message: expect.stringContaining('No teacher record is linked') })
   })
 
   test('fails when the teacher has no classes', async () => {
     mockGraphql
       .mockResolvedValueOnce(page('listTeachers', [{ id: 't2', first_name: 'A', last_name: 'B' }]))
       .mockResolvedValueOnce(page('listClasses', []))
-    await expect(getClassesForCurrentTeacher('sub-2')).rejects.toThrow('No classes are assigned to you yet.')
+    await expect(getClassesForCurrentTeacher('sub-2')).rejects.toMatchObject({ notAssigned: true, message: 'No classes are assigned to you yet.' })
   })
 })

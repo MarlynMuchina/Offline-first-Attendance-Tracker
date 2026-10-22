@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Navigate } from 'react-router-dom'
-import { fetchAuthSession, signOut } from 'aws-amplify/auth'
+import { signOut } from 'aws-amplify/auth'
+import { getSignedInSession } from '../lib/auth'
 import { LoadingScreen } from './AppShell'
 
 export default function ProtectedRoute({ children, allowedGroups }) {
@@ -11,17 +12,11 @@ export default function ProtectedRoute({ children, allowedGroups }) {
   useEffect(() => {
     async function check() {
       try {
-        // forceRefresh makes a live network call to Cognito -- only do this
-        // when online. Offline, fall back to a plain fetchAuthSession(),
-        // which Amplify satisfies from the local token cache if it hasn't
-        // expired. Without this split, every protected page load required
-        // network even for an already-valid cached session, which silently
-        // broke the offline access this app is supposed to provide.
-        const session = navigator.onLine
-          ? await fetchAuthSession({ forceRefresh: true })
-          : await fetchAuthSession()
-
-        const groups = session.tokens?.idToken?.payload['cognito:groups'] || []
+        // Online, refresh the tokens so a changed role takes effect. Offline,
+        // getSignedInSession uses the cached tokens, or the sign-in saved on
+        // this device once those have expired, so a signed-in teacher can
+        // still open their page without internet.
+        const { groups } = await getSignedInSession({ forceRefresh: navigator.onLine })
         setAuthenticated(true)
         setAuthorized(
           !allowedGroups || allowedGroups.length === 0
