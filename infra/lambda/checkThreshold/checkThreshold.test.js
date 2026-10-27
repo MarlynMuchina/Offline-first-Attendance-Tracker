@@ -197,3 +197,24 @@ test('the absence text fits in a single SMS', () => {
   const longName = { first_name: 'Christabel', last_name: 'Wanjiku-Mwangi' };
   expect(buildMessage('ABSENCE', longName, 0, '2026-10-14').length).toBeLessThanOrEqual(160);
 });
+
+test('Kiswahili guardians get every text in Kiswahili, each in a single SMS', () => {
+  const longName = { first_name: 'Christabel', last_name: 'Wanjiku-Mwangi', sms_language: 'SW' };
+  const absence = buildMessage('ABSENCE', longName, 0, '2026-10-14');
+  const warning = buildMessage('WARNING', longName, 0.69);
+  const ineligible = buildMessage('INELIGIBLE', longName, 0.6);
+  expect(absence).toContain('hakufika shuleni tarehe 2026-10-14');
+  expect(warning).toContain('Mahudhurio ya Christabel Wanjiku-Mwangi ni 69%');
+  expect(ineligible).toContain('haruhusiwi kufanya mitihani');
+  for (const text of [absence, warning, ineligible]) expect(text.length).toBeLessThanOrEqual(160);
+});
+
+test('a student with no language set gets English', () => {
+  expect(buildMessage('WARNING', STUDENT, 0.69)).toContain('below 70%');
+});
+
+test('the warning goes out in the language the guardian chose', async () => {
+  mockTables({ attendance: records(13, 6), student: { ...STUDENT, sms_language: 'SW' } });
+  await handler(EVENT);
+  expect(sentPayload().message).toContain('Mahudhurio ya Test Airtel');
+});

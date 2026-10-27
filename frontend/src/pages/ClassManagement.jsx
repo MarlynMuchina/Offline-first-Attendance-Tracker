@@ -4,7 +4,7 @@ import { schoolName } from '../lib/schools'
 import AppShell, { ADMIN_NAV } from '../components/AppShell'
 import { getCurrentUserContext } from '../lib/auth'
 import { NEEDS_INTERNET } from '../lib/network'
-import { SMS_PREFERENCES, DEFAULT_SMS_PREFERENCE } from '../lib/smsPreference'
+import { SMS_PREFERENCES, DEFAULT_SMS_PREFERENCE, SMS_LANGUAGES, DEFAULT_SMS_LANGUAGE } from '../lib/smsPreference'
 
 const client = generateClient()
 
@@ -203,6 +203,7 @@ export default function ClassManagement() {
   const [newStudentLastName, setNewStudentLastName] = useState('')
   const [newStudentPhone, setNewStudentPhone] = useState('')
   const [newStudentSmsPreference, setNewStudentSmsPreference] = useState(DEFAULT_SMS_PREFERENCE)
+  const [newStudentSmsLanguage, setNewStudentSmsLanguage] = useState(DEFAULT_SMS_LANGUAGE)
   const [newStudentClassId, setNewStudentClassId] = useState('')
   const [addingStudent, setAddingStudent] = useState(false)
   const [studentActionError, setStudentActionError] = useState('')
@@ -608,6 +609,7 @@ export default function ClassManagement() {
             last_name: newStudentLastName,
             guardian_phone: newStudentPhone || null,
             sms_preference: newStudentSmsPreference,
+            sms_language: newStudentSmsLanguage,
             status: 'ACTIVE',
             created_at: now,
             updated_at: now,
@@ -618,6 +620,7 @@ export default function ClassManagement() {
       setNewStudentLastName('')
       setNewStudentPhone('')
       setNewStudentSmsPreference(DEFAULT_SMS_PREFERENCE)
+      setNewStudentSmsLanguage(DEFAULT_SMS_LANGUAGE)
       setNewStudentClassId('')
       await loadAllStudents(schoolId)
     } catch (err) {
@@ -952,6 +955,14 @@ export default function ClassManagement() {
             <select value={newStudentSmsPreference} onChange={(e) => setNewStudentSmsPreference(e.target.value)} style={{ padding: 6 }}>
               {SMS_PREFERENCES.map((p) => (
                 <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, display: 'block' }}>Text language</label>
+            <select value={newStudentSmsLanguage} onChange={(e) => setNewStudentSmsLanguage(e.target.value)} style={{ padding: 6 }}>
+              {SMS_LANGUAGES.map((l) => (
+                <option key={l.value} value={l.value}>{l.label}</option>
               ))}
             </select>
           </div>

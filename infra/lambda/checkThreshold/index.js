@@ -31,8 +31,19 @@ function formatPercent(rate) {
   return `${Math.floor(rate * 100)}%`;
 }
 
+// Guardians choose English (default) or Kiswahili on the student as
+// sms_language: EN | SW. Every text stays within one 160-character SMS.
 function buildMessage(stage, student, rate, date) {
   const name = `${student.first_name} ${student.last_name}`;
+  if (student.sms_language === 'SW') {
+    if (stage === 'ABSENCE') {
+      return `CSG: ${name} hakufika shuleni tarehe ${date}. Tafadhali wasiliana na shule ukiwa na swali lolote.`;
+    }
+    if (stage === 'INELIGIBLE') {
+      return `CSG: Mahudhurio ya ${name} ni ${formatPercent(rate)}, chini ya kiwango cha 67%. Kwa sasa haruhusiwi kufanya mitihani. Tafadhali wasiliana na shule.`;
+    }
+    return `CSG: Mahudhurio ya ${name} ni ${formatPercent(rate)}, chini ya 70%. Chini ya 67% hataruhusiwa kufanya mitihani. Tafadhali wasiliana na shule.`;
+  }
   if (stage === 'ABSENCE') {
     return `CSG: ${name} was marked absent on ${date}. Please contact the school if you have any questions.`;
   }
