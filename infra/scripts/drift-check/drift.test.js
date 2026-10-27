@@ -52,6 +52,7 @@ function loadComputeFeaturesFromLambda() {
       .replace(/^const model = require\(.*\);$/gm, '') // strip whole model.json load line
       .replace(/^const client = new DynamoDBClient\(.*\);$/gm, '') // strip DynamoDB client construction
       .replace(/^const doc = DynamoDBDocumentClient\.from\(.*\);$/gm, '') // strip doc client construction
+      .replace(/^const cognito = new CognitoIdentityProviderClient\(.*\);$/gm, '') // strip Cognito client construction
       .replace(/^const ATTENDANCE_TABLE = .*;$/gm, '') // strip env var read (unused by pure functions)
       .replace(/exports\.handler[\s\S]*$/m, '') // strip everything from exports.handler onward
       + '\nsandbox.isAttended = isAttended; sandbox.computeFeatures = computeFeatures;'
