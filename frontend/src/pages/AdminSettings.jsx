@@ -5,7 +5,7 @@ import AppShell, { ADMIN_NAV } from '../components/AppShell'
 import { getChronicThreshold, setChronicThreshold, getTermStart, setTermStart, getExamDate, setExamDate } from '../lib/settings'
 import { getCurrentUserContext, getClassesForSchool } from '../lib/auth'
 import { NEEDS_INTERNET } from '../lib/network'
-import { SMS_PREFERENCES, DEFAULT_SMS_PREFERENCE } from '../lib/smsPreference'
+import { SMS_PREFERENCES, DEFAULT_SMS_PREFERENCE, SMS_LANGUAGES, DEFAULT_SMS_LANGUAGE } from '../lib/smsPreference'
 
 const client = generateClient()
 
@@ -19,6 +19,7 @@ const listStudentsQuery = /* GraphQL */ `
         class_id
         guardian_phone
         sms_preference
+        sms_language
       }
       nextToken
     }
@@ -31,6 +32,7 @@ const updateStudentMutation = /* GraphQL */ `
       id
       guardian_phone
       sms_preference
+      sms_language
     }
   }
 `
@@ -113,6 +115,7 @@ export default function AdminSettings() {
   const [error, setError] = useState('')
   const [editedPhones, setEditedPhones] = useState({}) // { studentId: newValue }
   const [editedPrefs, setEditedPrefs] = useState({}) // { studentId: sms_preference }
+  const [editedLangs, setEditedLangs] = useState({}) // { studentId: sms_language }
   const [savingId, setSavingId] = useState(null)
   const [saveError, setSaveError] = useState('')
 
@@ -228,6 +231,7 @@ export default function AdminSettings() {
             id: studentId,
             ...(editedPhones[studentId] !== undefined && { guardian_phone: editedPhones[studentId] }),
             ...(editedPrefs[studentId] !== undefined && { sms_preference: editedPrefs[studentId] }),
+            ...(editedLangs[studentId] !== undefined && { sms_language: editedLangs[studentId] }),
             updated_at: new Date().toISOString(),
           },
         },
@@ -240,6 +244,7 @@ export default function AdminSettings() {
       }
       setEditedPhones(without)
       setEditedPrefs(without)
+      setEditedLangs(without)
     } catch (err) {
       console.error('Failed to update phone:', err)
       const detail = err.errors?.map((e) => e.message).join('; ') || err.message
@@ -310,7 +315,7 @@ export default function AdminSettings() {
       <div className="card">
         <h4>Guardian Phones and SMS Alerts</h4>
         <p style={{ fontSize: 12, color: 'var(--muted)' }}>
-          Each guardian chooses whether to get a text for every absence, or only when attendance drops below 70% and below the exam line.
+          Each guardian chooses whether to get a text for every absence, or only when attendance drops below 70% and below the exam line, and whether the texts come in English or Kiswahili.
         </p>
         {loading && <p style={{ fontSize: 13, color: 'var(--muted)' }}>Loading…</p>}
         {error && <p style={{ color: 'var(--red-text)', fontSize: 13 }}>{error}</p>}
@@ -323,6 +328,7 @@ export default function AdminSettings() {
                 <th>Class</th>
                 <th>Guardian Phone</th>
                 <th>Texts</th>
+                <th>Language</th>
                 <th></th>
               </tr>
             </thead>
@@ -331,9 +337,12 @@ export default function AdminSettings() {
                 const currentValue = editedPhones[s.id] ?? s.guardian_phone ?? ''
                 const savedPref = s.sms_preference || DEFAULT_SMS_PREFERENCE
                 const currentPref = editedPrefs[s.id] ?? savedPref
+                const savedLang = s.sms_language || DEFAULT_SMS_LANGUAGE
+                const currentLang = editedLangs[s.id] ?? savedLang
                 const isDirty =
                   (editedPhones[s.id] !== undefined && editedPhones[s.id] !== s.guardian_phone) ||
-                  currentPref !== savedPref
+                  currentPref !== savedPref ||
+                  currentLang !== savedLang
                 return (
                   <tr key={s.id} style={{ borderTop: '1px solid var(--sand)' }}>
                     <td style={{ padding: '8px 0' }}>{s.first_name} {s.last_name}</td>
@@ -358,6 +367,19 @@ export default function AdminSettings() {
                       >
                         {SMS_PREFERENCES.map((p) => (
                           <option key={p.value} value={p.value}>{p.label}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <select
+                        value={currentLang}
+                        onChange={(e) =>
+                          setEditedLangs((prev) => ({ ...prev, [s.id]: e.target.value }))
+                        }
+                        style={{ padding: 4, fontSize: 12 }}
+                      >
+                        {SMS_LANGUAGES.map((l) => (
+                          <option key={l.value} value={l.value}>{l.label}</option>
                         ))}
                       </select>
                     </td>
