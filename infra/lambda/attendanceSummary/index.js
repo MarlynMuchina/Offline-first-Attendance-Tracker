@@ -87,7 +87,9 @@ exports.handler = async (event) => {
 
   const summaryRows = Object.values(statsByStudent).map((s) => ({
     name: s.name,
-    attendance_rate: s.total > 0 ? Math.round((s.present / s.total) * 100) : null,
+    // Late counts as attended, the same as on the dashboard, in the SMS alerts
+    // and in the risk model.
+    attendance_rate: s.total > 0 ? Math.round(((s.present + s.late) / s.total) * 100) : null,
     absences: s.absent,
     lates: s.late,
   }));

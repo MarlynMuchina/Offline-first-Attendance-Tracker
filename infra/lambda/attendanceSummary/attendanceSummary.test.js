@@ -67,8 +67,10 @@ const RECORDS = [
   ...Array(8).fill(null).map((_, i) => ({ student_id: 'S001', status: 'PRESENT', date: `2026-06-0${i + 1}` })),
   { student_id: 'S001', status: 'ABSENT', date: '2026-06-09' },
   { student_id: 'S001', status: 'ABSENT', date: '2026-06-10' },
-  // S002: 6 present, 3 absent, 1 late -> 6/10 = 60% (below threshold)
-  ...Array(6).fill(null).map((_, i) => ({ student_id: 'S002', status: 'PRESENT', date: `2026-06-0${i + 1}` })),
+  // S002: 5 present, 4 absent, 1 late -> (5 + 1)/10 = 60% (below threshold;
+  // late counts as attended)
+  ...Array(5).fill(null).map((_, i) => ({ student_id: 'S002', status: 'PRESENT', date: `2026-06-0${i + 1}` })),
+  { student_id: 'S002', status: 'ABSENT', date: '2026-06-06' },
   { student_id: 'S002', status: 'ABSENT', date: '2026-06-07' },
   { student_id: 'S002', status: 'ABSENT', date: '2026-06-08' },
   { student_id: 'S002', status: 'ABSENT', date: '2026-06-09' },
@@ -152,6 +154,24 @@ describe('attendanceSummary handler', () => {
 
     expect(promptText).toContain('"attendance_rate": 80');
     expect(promptText).toContain('"attendance_rate": 60');
+  });
+
+  test('late counts as attended, not absent', async () => {
+    const lateRecords = [
+      ...Array(7).fill(null).map((_, i) => ({ student_id: 'S001', status: 'LATE', date: `2026-06-0${i + 1}` })),
+      ...Array(3).fill(null).map((_, i) => ({ student_id: 'S001', status: 'ABSENT', date: `2026-06-0${i + 8}` })),
+    ];
+    mockDocSend
+      .mockResolvedValueOnce({ Items: [STUDENTS[0]] })
+      .mockResolvedValueOnce({ Items: lateRecords });
+    mockBedrockSend.mockResolvedValue(bedrockResponseFor('summary text'));
+
+    await handler({ arguments: { input: VALID_INPUT }, identity: SCH01_CALLER });
+
+    const promptText = JSON.parse(mockBedrockSend.mock.calls[0][0].body).messages[0].content;
+    expect(promptText).toContain('"attendance_rate": 70');
+    expect(promptText).toContain('"lates": 7');
+    expect(promptText).toContain('Students below 70% attendance: none');
   });
 
   test('a student with zero records in range gets a null attendance_rate, not a divide-by-zero error', async () => {
