@@ -8,6 +8,7 @@ import { signOut } from 'aws-amplify/auth'
 import jsPDF from 'jspdf'
 import { NETWORK_SCHOOL_ID } from '../lib/schools'
 import { db } from '../lib/db'
+import { fetchClassAttendance } from '../lib/classAttendance'
 import { getChronicThreshold, getTermStart, getExamDate, defaultDateRange } from '../lib/settings'
 import { countSchoolDaysBetween, projectEligibility, EXAM_ATTENDANCE_REQUIRED } from '../lib/examEligibility'
 import { schoolName } from '../lib/schools'
@@ -25,27 +26,6 @@ const listStudentsQuery = /* GraphQL */ `
         id
         first_name
         last_name
-      }
-      nextToken
-    }
-  }
-`
-
-const listAttendanceQuery = /* GraphQL */ `
-  query ListAttendanceByClassAndRange($classId: ID, $startDate: String, $endDate: String, $nextToken: String) {
-    listAttendanceRecords(
-      filter: {
-        class_id: { eq: $classId }
-        date: { between: [$startDate, $endDate] }
-      }
-      limit: 1000
-      nextToken: $nextToken
-    ) {
-      items {
-        id
-        student_id
-        date
-        status
       }
       nextToken
     }
@@ -288,11 +268,7 @@ const loadData = useCallback(async () => {
   try {
     const [students, records] = await cloudCall(Promise.all([
       fetchAllPages(listStudentsQuery, { classId }, 'listStudents'),
-      fetchAllPages(
-        listAttendanceQuery,
-        { classId, startDate, endDate },
-        'listAttendanceRecords'
-      ),
+      fetchClassAttendance((request) => client.graphql(request), { classId, startDate, endDate }),
     ]), 20000)
     setStats(computeStats(students, records, getChronicThreshold()))
     setSavedCopy(null)
@@ -508,11 +484,11 @@ useEffect(() => {
     setEligibilityError('')
     try {
       const today = new Date().toISOString().split('T')[0]
-      const records = await fetchAllPages(
-        listAttendanceQuery,
-        { classId, startDate: termStart, endDate: today < examDate ? today : examDate },
-        'listAttendanceRecords'
-      )
+      const records = await fetchClassAttendance((request) => client.graphql(request), {
+        classId,
+        startDate: termStart,
+        endDate: today < examDate ? today : examDate,
+      })
       const counts = {}
       for (const r of records) {
         const c = counts[r.student_id] || (counts[r.student_id] = { recorded: 0, attended: 0 })
