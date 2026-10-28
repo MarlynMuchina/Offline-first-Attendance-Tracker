@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { generateClient } from 'aws-amplify/api'
-import { SCHOOLS, schoolName } from '../lib/schools'
+import { allSchools, schoolName, rememberSchools } from '../lib/schools'
 
 const client = generateClient()
 
@@ -10,6 +10,7 @@ const manageSchoolAdminsMutation = /* GraphQL */ `
       admins { username phone_number name school_id enabled status created_at }
       admin { username phone_number name school_id enabled status }
       temporary_password
+      school { school_id name type county }
     }
   }
 `
@@ -26,15 +27,20 @@ const STATUS_LABELS = {
   CONFIRMED: 'Active',
 }
 
-// Angaza creates and looks after one or more admin logins per school. The
+const SCHOOL_TYPES = ['Mixed', 'Girls', 'Boys']
+const EMPTY_SCHOOL = { school_name: '', school_type: 'Mixed', county: '' }
+
+// Angaza adds schools and creates one or more admin logins per school. The
 // temporary password is shown once, to be handed to the new admin.
-export default function SchoolAdmins() {
+export default function SchoolAdmins({ onSchoolAdded }) {
   const [admins, setAdmins] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(null)
   const [handover, setHandover] = useState(null) // { name, phone, password }
   const [form, setForm] = useState({ school_id: '', first_name: '', last_name: '', phone_number: '' })
+  const [schoolForm, setSchoolForm] = useState(EMPTY_SCHOOL)
+  const [addedSchool, setAddedSchool] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -84,7 +90,27 @@ export default function SchoolAdmins() {
     if (ok) setForm({ school_id: '', first_name: '', last_name: '', phone_number: '' })
   }
 
-  const schoolsWithoutAdmin = Object.keys(SCHOOLS).filter(
+  async function handleAddSchool(e) {
+    e.preventDefault()
+    setBusy('school')
+    setError('')
+    try {
+      const { school } = await manage({ action: 'CREATE_SCHOOL', ...schoolForm })
+      rememberSchools([school])
+      setAddedSchool(school)
+      setSchoolForm(EMPTY_SCHOOL)
+      setForm((f) => ({ ...f, school_id: school.school_id }))
+      onSchoolAdded?.()
+    } catch (err) {
+      console.error('Adding a school failed:', err)
+      setError(errorText(err))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const schoolIds = Object.keys(allSchools()).sort()
+  const schoolsWithoutAdmin = schoolIds.filter(
     (id) => !admins.some((a) => a.school_id === id && a.enabled)
   )
 
@@ -172,6 +198,48 @@ export default function SchoolAdmins() {
         </table>
       )}
 
+      <h4 style={{ marginTop: 16 }}>Add a school</h4>
+      <p className="subtext">
+        Each new school gets the next id (SCH06, SCH07, …). Then create its admin below; the admin adds the
+        classes, teachers and students.
+      </p>
+      {addedSchool && (
+        <p className="text-success">
+          {addedSchool.name} was added as {addedSchool.school_id}. It is selected below, so you can create its admin now.
+        </p>
+      )}
+      <form onSubmit={handleAddSchool} className="button-group" style={{ flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <label className="subtext">
+          School name{' '}
+          <input
+            value={schoolForm.school_name}
+            onChange={(e) => setSchoolForm({ ...schoolForm, school_name: e.target.value })}
+            maxLength={80}
+            required
+          />
+        </label>
+        <label className="subtext">
+          Type{' '}
+          <select
+            value={schoolForm.school_type}
+            onChange={(e) => setSchoolForm({ ...schoolForm, school_type: e.target.value })}
+          >
+            {SCHOOL_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </label>
+        <label className="subtext">
+          County{' '}
+          <input
+            value={schoolForm.county}
+            onChange={(e) => setSchoolForm({ ...schoolForm, county: e.target.value })}
+            required
+          />
+        </label>
+        <button type="submit" className="btn btn-small" disabled={busy !== null}>
+          {busy === 'school' ? 'Adding…' : 'Add school'}
+        </button>
+      </form>
+
       <h4 style={{ marginTop: 16 }}>Add a school admin</h4>
       <form onSubmit={handleCreate} className="button-group" style={{ flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <label className="subtext">
@@ -182,7 +250,7 @@ export default function SchoolAdmins() {
             required
           >
             <option value="">Select a school…</option>
-            {Object.keys(SCHOOLS).map((id) => (
+            {schoolIds.map((id) => (
               <option key={id} value={id}>{schoolName(id)}</option>
             ))}
           </select>

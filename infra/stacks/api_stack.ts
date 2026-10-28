@@ -155,9 +155,20 @@ createTeacherAccountFn.addToRolePolicy(new iam.PolicyStatement({
   resources: [props.userPool.userPoolArn],
 }));
 
+// ---- Schools added by Angaza ----
+// The five pilot schools are built into the app; schools Angaza adds later
+// are kept here. Not an AppSync @model: only manageSchoolAdmins reads it.
+const schoolsTable = new dynamodb.Table(this, 'SchoolsTable', {
+  tableName: 'csg-schools',
+  partitionKey: { name: 'school_id', type: dynamodb.AttributeType.STRING },
+  billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+  removalPolicy: cdk.RemovalPolicy.RETAIN,
+});
+
 // ---- manageSchoolAdmins function ----
-// Angaza staff create, disable and reset the admin login of each school.
-// The Lambda itself refuses any caller whose school isn't ANGAZA.
+// Angaza staff create, disable and reset the admin login of each school,
+// and add schools. The Lambda itself refuses any caller whose school isn't
+// ANGAZA (reading the school list is open to every admin).
 const manageSchoolAdminsFn = new lambda.Function(this, 'ManageSchoolAdminsFunction', {
   functionName: 'manageSchoolAdminsFunction',
   runtime: lambda.Runtime.NODEJS_18_X,
@@ -166,8 +177,11 @@ const manageSchoolAdminsFn = new lambda.Function(this, 'ManageSchoolAdminsFuncti
   code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/manageSchoolAdmins')),
   environment: {
     USER_POOL_ID: props.userPool.userPoolId,
+    SCHOOLS_TABLE: schoolsTable.tableName,
   },
 });
+
+schoolsTable.grant(manageSchoolAdminsFn, 'dynamodb:Scan', 'dynamodb:PutItem');
 
 manageSchoolAdminsFn.addToRolePolicy(new iam.PolicyStatement({
   actions: [

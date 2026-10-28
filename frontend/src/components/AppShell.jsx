@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { signOut } from 'aws-amplify/auth'
 import { initials } from '../lib/display'
+import { getTheme, setTheme } from '../lib/theme'
 
 const ICONS = {
   dashboard: <><rect x="3" y="3" width="7" height="9" rx="2" /><rect x="14" y="3" width="7" height="5" rx="2" /><rect x="14" y="12" width="7" height="9" rx="2" /><rect x="3" y="16" width="7" height="5" rx="2" /></>,
@@ -9,6 +10,8 @@ const ICONS = {
   settings: <><circle cx="12" cy="12" r="3" /><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></>,
   register: <><rect x="4" y="4" width="16" height="17" rx="3" /><path d="M8 2v4M16 2v4M8.5 13.5l2.5 2.5 4.5-5" /></>,
   addStudent: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.4 3.4-5.5 6.5-5.5s5.7 2.1 6.5 5.5" /><path d="M19 8v6M16 11h6" /></>,
+  moon: <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />,
+  sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>,
   network: <><circle cx="12" cy="5" r="2.5" /><circle cx="5" cy="18" r="2.5" /><circle cx="19" cy="18" r="2.5" /><path d="M12 7.5v4M12 11.5l-5.5 4.5M12 11.5l5.5 4.5" /></>,
 }
 
@@ -44,6 +47,7 @@ export const ADMIN_NAV = [
 export default function AppShell({ nav, user, status, children }) {
   const navigate = useNavigate()
   const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const [theme, setThemeState] = useState(getTheme)
 
   useEffect(() => {
     const goOnline = () => setIsOnline(true)
@@ -55,6 +59,12 @@ export default function AppShell({ nav, user, status, children }) {
       window.removeEventListener('offline', goOffline)
     }
   }, [])
+
+  function toggleTheme() {
+    const next = theme === 'dark' ? 'light' : 'dark'
+    setTheme(next)
+    setThemeState(next)
+  }
 
   async function handleSignOut() {
     await signOut()
@@ -97,6 +107,10 @@ export default function AppShell({ nav, user, status, children }) {
               <span>{user.role}</span>
             </div>
           </div>
+          <button type="button" className="shell-theme" onClick={toggleTheme} aria-pressed={theme === 'dark'}>
+            <Icon name={theme === 'dark' ? 'sun' : 'moon'} />
+            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          </button>
           <button type="button" className="shell-signout" onClick={handleSignOut}>Sign out</button>
         </div>
       </aside>

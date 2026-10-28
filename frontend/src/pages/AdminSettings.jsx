@@ -278,7 +278,7 @@ export default function AdminSettings() {
           />
           <span>%</span>
           <button type="submit" style={{ padding: '6px 12px' }}>Save</button>
-          {thresholdSaved && <span style={{ color: 'var(--green-2)', fontSize: 12 }}>Saved</span>}
+          {thresholdSaved && <span style={{ color: 'var(--green-ink)', fontSize: 12 }}>Saved</span>}
         </form>
       </div>
 
@@ -307,7 +307,7 @@ export default function AdminSettings() {
             />
           </label>
           <button type="submit" style={{ padding: '6px 12px' }}>Save</button>
-          {termDatesSaved && <span style={{ color: 'var(--green-2)', fontSize: 12 }}>Saved</span>}
+          {termDatesSaved && <span style={{ color: 'var(--green-ink)', fontSize: 12 }}>Saved</span>}
         </form>
         {termDatesError && <p style={{ color: 'var(--red-text)', fontSize: 13 }}>{termDatesError}</p>}
       </div>
@@ -426,7 +426,7 @@ export default function AdminSettings() {
                   <td>
                     <span style={{
                       fontSize: 11, padding: '2px 8px', borderRadius: 10,
-                      color: log.status === 'SENT' ? 'var(--green-2)' : 'var(--red)',
+                      color: log.status === 'SENT' ? 'var(--green-ink)' : 'var(--red)',
                       border: '1px solid currentColor',
                     }}>
                       {log.status}

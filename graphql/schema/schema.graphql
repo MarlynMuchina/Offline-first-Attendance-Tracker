@@ -125,12 +125,23 @@ type Mutation {
 }
 
 input ManageSchoolAdminsInput {
-  action: String!            # LIST | CREATE | DISABLE | ENABLE | RESET_PASSWORD
+  action: String!            # LIST | CREATE | DISABLE | ENABLE | RESET_PASSWORD | CREATE_SCHOOL | LIST_SCHOOLS
   school_id: ID
   first_name: String
   last_name: String
   phone_number: AWSPhone
   username: String
+  school_name: String        # CREATE_SCHOOL
+  school_type: String        # Mixed | Girls | Boys
+  county: String
+}
+
+type School {
+  school_id: ID!
+  name: String!
+  type: String
+  county: String
+  created_at: AWSDateTime
 }
 
 type SchoolAdmin {
@@ -147,6 +158,8 @@ type ManageSchoolAdminsResult {
   admins: [SchoolAdmin!]
   admin: SchoolAdmin
   temporary_password: String
+  schools: [School!]
+  school: School
 }
 
 input GenerateAttendanceSummaryInput {

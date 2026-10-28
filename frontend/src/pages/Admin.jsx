@@ -11,7 +11,7 @@ import { db } from '../lib/db'
 import { fetchClassAttendance } from '../lib/classAttendance'
 import { getChronicThreshold, getTermStart, getExamDate, defaultDateRange } from '../lib/settings'
 import { countSchoolDaysBetween, projectEligibility, EXAM_ATTENDANCE_REQUIRED } from '../lib/examEligibility'
-import { schoolName } from '../lib/schools'
+import { schoolName, refreshSchools } from '../lib/schools'
 import { greetingFor, formatDay, weeklyRates } from '../lib/display'
 import AppShell, { ADMIN_NAV, Ring, LoadingScreen } from '../components/AppShell'
 
@@ -292,6 +292,8 @@ const loadData = useCallback(async () => {
   }
 }, [classId, startDate, endDate])  // ← add classId to deps
 
+const [, setSchoolListVersion] = useState(0)
+
 useEffect(() => {
   async function resolveContext() {
     try {
@@ -308,6 +310,8 @@ useEffect(() => {
         .put({ key: 'context', schoolId: sid, classes: schoolClasses })
         .catch((err) => console.warn('Could not save class list on this device:', err))
       checkAndClaimAdminSession(sid, phoneNumber)
+      // A school Angaza added later is named from the server's list.
+      refreshSchools((request) => client.graphql(request)).then((ok) => ok && setSchoolListVersion((v) => v + 1))
     } catch (err) {
       // Offline: fall back to the school and classes saved on this device.
       const saved = await db.dashboardCache.get('context').catch(() => null)

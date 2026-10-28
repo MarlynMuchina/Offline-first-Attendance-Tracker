@@ -27,6 +27,12 @@
   --red-text: #9B1C1C;
   --amber-soft: #FDF0D5;
   --amber-text: #8A4B0B;
+  --card: #fff;
+  --green-ink: #1F4D3A;
+  --dashed: #D9CDB4;
+  --notice-ink: #5A4A2A;
+  --ring-track: #EFE7D6;
+  color-scheme: light;
 
   /* older names still used by a few inline styles */
   --color-primary: var(--green);
@@ -37,6 +43,32 @@
   --color-text: var(--ink);
   --color-text-muted: var(--muted);
   --radius: 22px;
+}
+
+/* Dark mode: same layout, darker surfaces. The green sidebar and the green
+   and marigold buttons keep their colours; green text gets lighter so it
+   stays readable on dark cards. */
+:root[data-theme='dark'] {
+  --cream: #111915;
+  --card: #1A2520;
+  --sand: #22302A;
+  --line: #2C3B33;
+  --field: #16201B;
+  --field-line: #34453B;
+  --ink: #E6EEE9;
+  --muted: #A2B1A8;
+  --body: #C9D4CD;
+  --green-ink: #8FD1AE;
+  --green-soft: #1F3A2E;
+  --red: #DC4B4B;
+  --red-soft: #3B1E1E;
+  --red-text: #F4A7A7;
+  --amber-soft: #3A2D16;
+  --amber-text: #F2C67A;
+  --dashed: #3D4E44;
+  --notice-ink: #F2DDB4;
+  --ring-track: #2C3B33;
+  color-scheme: dark;
 }
 
 * {
@@ -51,7 +83,7 @@ body {
 }
 
 a {
-  color: var(--green);
+  color: var(--green-ink);
 }
 
 h1, h2, h3, h4 {
@@ -84,9 +116,9 @@ button {
   font: inherit;
   font-size: 13px;
   font-weight: 600;
-  color: var(--green);
-  background: #fff;
-  border: 1.5px solid var(--green);
+  color: var(--green-ink);
+  background: var(--card);
+  border: 1.5px solid var(--green-ink);
   border-radius: 999px;
   padding: 6px 14px;
   cursor: pointer;
@@ -114,6 +146,7 @@ button:disabled {
 .btn-primary {
   background: var(--green);
   color: #fff;
+  border-color: var(--green);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -160,7 +193,7 @@ button:disabled {
 }
 
 .text-success {
-  color: var(--green-2);
+  color: var(--green-ink);
   font-size: 13px;
 }
 
@@ -202,7 +235,7 @@ button:disabled {
 /* ---------- Cards ---------- */
 
 .card {
-  background: #fff;
+  background: var(--card);
   border-radius: 28px;
   padding: 26px 28px;
   min-width: 0;
@@ -215,7 +248,7 @@ button:disabled {
 }
 
 .card-dashed {
-  border: 1.5px dashed #D9CDB4;
+  border: 1.5px dashed var(--dashed);
 }
 
 .card-dark {
@@ -265,7 +298,7 @@ button:disabled {
 }
 
 .stat {
-  background: #fff;
+  background: var(--card);
   border: 1px solid var(--line);
   border-radius: 22px;
   padding: 20px 22px;
@@ -303,7 +336,7 @@ button:disabled {
   padding: 14px;
   border-radius: 16px;
   background: var(--amber-soft);
-  color: #5A4A2A;
+  color: var(--notice-ink);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -312,7 +345,7 @@ button:disabled {
   display: grid;
   gap: 12px;
   background: var(--green-soft);
-  color: var(--green);
+  color: var(--green-ink);
 }
 
 .signed-in-actions {
@@ -362,7 +395,7 @@ td {
 
 .pill-red { background: var(--red-soft); color: var(--red-text); }
 .pill-amber { background: var(--amber-soft); color: var(--amber-text); }
-.pill-green { background: var(--green-soft); color: var(--green); }
+.pill-green { background: var(--green-soft); color: var(--green-ink); }
 .pill-gray { background: var(--sand); color: var(--muted); }
 
 /* ---------- App frame (sidebar + page) ---------- */
@@ -444,8 +477,8 @@ td {
 }
 
 .nav-item.is-active {
-  background: #fff;
-  color: var(--green);
+  background: var(--card);
+  color: var(--green-ink);
   font-weight: 700;
 }
 
@@ -518,6 +551,21 @@ td {
 }
 
 .shell-signout:hover:not(:disabled) {
+  background: var(--green-2);
+}
+
+.shell-theme {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  color: #E3EEE8;
+  border: none;
+  border-radius: 14px;
+  padding: 8px 14px;
+}
+
+.shell-theme:hover:not(:disabled) {
   background: var(--green-2);
 }
 
@@ -596,7 +644,7 @@ td {
 .ring {
   flex: none;
   border-radius: 50%;
-  background: conic-gradient(var(--marigold) 0 var(--ring-fill), #EFE7D6 var(--ring-fill) 100%);
+  background: conic-gradient(var(--marigold) 0 var(--ring-fill), var(--ring-track) var(--ring-fill) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -606,7 +654,7 @@ td {
   width: 76%;
   height: 76%;
   border-radius: 50%;
-  background: #fff;
+  background: var(--card);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -758,7 +806,7 @@ td {
   height: 34px;
   border-radius: 50%;
   border: 4px solid var(--sand);
-  border-top-color: var(--green);
+  border-top-color: var(--green-ink);
   animation: spin 0.9s linear infinite;
 }
 
@@ -864,8 +912,8 @@ td {
   display: block;
   text-align: center;
   text-decoration: none;
-  color: var(--green);
-  border: 1.5px solid var(--green);
+  color: var(--green-ink);
+  border: 1.5px solid var(--green-ink);
   border-radius: 999px;
   font-weight: 600;
 }

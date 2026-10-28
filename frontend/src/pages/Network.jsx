@@ -5,7 +5,7 @@ import { getCurrentUserContext } from '../lib/auth'
 import { NEEDS_INTERNET } from '../lib/network'
 import { getChronicThreshold, defaultDateRange } from '../lib/settings'
 import { EXAM_ATTENDANCE_REQUIRED } from '../lib/examEligibility'
-import { SCHOOLS, NETWORK_SCHOOL_ID, schoolName } from '../lib/schools'
+import { allSchools, NETWORK_SCHOOL_ID, schoolName, refreshSchools } from '../lib/schools'
 import SchoolAdmins from '../components/SchoolAdmins'
 import AppShell, { Ring } from '../components/AppShell'
 import { greetingFor } from '../lib/display'
@@ -93,7 +93,7 @@ function buildNetworkStats(classes, students, records, warningLine) {
   // Students removed from a school have class_id cleared; leave them out.
   const enrolled = students.filter((s) => s.class_id)
 
-  const schoolIds = new Set([...Object.keys(SCHOOLS), ...classes.map((c) => c.school_id)])
+  const schoolIds = new Set([...Object.keys(allSchools()), ...classes.map((c) => c.school_id)])
   schoolIds.delete(NETWORK_SCHOOL_ID)
 
   const schools = [...schoolIds].sort().map((schoolId) => {
@@ -156,6 +156,7 @@ export default function Network() {
         fetchAllPages(listAllClassesQuery, {}, 'listClasses'),
         fetchAllPages(listAllStudentsQuery, {}, 'listStudents'),
         fetchAllPages(listAttendanceInRangeQuery, { startDate, endDate }, 'listAttendanceRecords'),
+        refreshSchools((request) => client.graphql(request)),
       ])
       setStats(buildNetworkStats(classes, students, records, warningLine))
     } catch (err) {
@@ -178,7 +179,7 @@ export default function Network() {
       nav={[{ to: '/network', label: 'Network overview', icon: 'network' }]}
       user={{ name: 'Angaza team', role: 'Network admin' }}
     >
-      <p className="eyebrow">Angaza network overview · {Object.keys(SCHOOLS).length} schools</p>
+      <p className="eyebrow">Angaza network overview · {Object.keys(allSchools()).length} schools</p>
 
       <section className="card hero">
         <Ring value={stats ? stats.total.rate : null} caption="network average" />
@@ -267,7 +268,7 @@ export default function Network() {
         </>
       )}
 
-      {allowed && navigator.onLine && <SchoolAdmins />}
+      {allowed && navigator.onLine && <SchoolAdmins onSchoolAdded={loadData} />}
     </AppShell>
   )
 }
@@ -277,7 +278,7 @@ function SchoolRows({ school, open, onToggle }) {
     <>
       <tr onClick={onToggle} style={{ cursor: 'pointer', fontWeight: open ? 600 : 400 }}>
         <td>{open ? '▾' : '▸'} {schoolName(school.id)}</td>
-        <td>{SCHOOLS[school.id]?.county || '—'}</td>
+        <td>{allSchools()[school.id]?.county || '—'}</td>
         <td>{school.classes.length}</td>
         <td>{school.students}</td>
         <td>{pct(school.rate)}</td>

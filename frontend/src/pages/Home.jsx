@@ -22,8 +22,8 @@ const features = [
 
 const accountSteps = [
   {
-    title: 'Angaza adds each school admin',
-    desc: 'The Angaza team creates one admin login per school from the network overview.',
+    title: 'Angaza adds schools and their admins',
+    desc: 'From the network overview, the Angaza team adds a school and creates its admin login.',
   },
   {
     title: 'The school admin adds teachers',

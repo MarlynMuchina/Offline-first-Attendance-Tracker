@@ -28,30 +28,6 @@ const listStudentsQuery = /* GraphQL */ `
   }
 `
 
-const listSchoolStudentsQuery = /* GraphQL */ `
-  query ListAllSchoolStudents($schoolId: ID, $nextToken: String) {
-    listStudents(filter: { school_id: { eq: $schoolId } }, limit: 100, nextToken: $nextToken) {
-      items {
-        id
-        first_name
-        last_name
-        class_id
-        status
-      }
-      nextToken
-    }
-  }
-`
-
-const updateStudentClassMutation = /* GraphQL */ `
-  mutation AssignStudentToClass($input: UpdateStudentInput!) {
-    updateStudent(input: $input) {
-      id
-      class_id
-     }
-  }
-`
-
 const today = () => new Date().toISOString().split('T')[0]
 
 const MARK_OPTIONS = [
@@ -76,11 +52,6 @@ export default function Teacher() {
 
   const [teacherName, setTeacherName] = useState('')
   const [myClasses, setMyClasses] = useState([])
-  const [availableStudents, setAvailableStudents] = useState([])
-
-  const [availableLoading, setAvailableLoading] = useState(false)
-  const [availableError, setAvailableError] = useState('')
-  const [addingStudentId, setAddingStudentId] = useState(null)
 
   const loadStudents = useCallback(async (resolvedClassId) => {
     try {
@@ -123,40 +94,6 @@ export default function Teacher() {
     setQueueRecords(records)
   }, [])
 
-  const loadAvailableStudents = useCallback(async (resolvedSchoolId, resolvedClassId) => {
-    if (!navigator.onLine) {
-      setAvailableError('Adding students needs internet. Marking the register works offline.')
-      return
-    }
-    setAvailableLoading(true)
-    setAvailableError('')
-    try {
-      let items = []
-      let nextToken = null
-      do {
-        const res = await client.graphql({
-          query: listSchoolStudentsQuery,
-          variables: { schoolId: resolvedSchoolId, nextToken },
-        })
-        items = items.concat(res.data.listStudents.items)
-        nextToken = res.data.listStudents.nextToken
-      } while (nextToken)
-
-      // Only students not in any class (removed students stay out). Moving a
-      // student out of another teacher's class is done by the admin.
-      setAvailableStudents(items.filter((s) => !s.class_id && s.status !== 'INACTIVE'))
-    } catch (err) {
-      console.error('Failed to load available students:', err)
-      setAvailableError(
-        navigator.onLine
-          ? err.message || 'Failed to load students'
-          : 'Adding students needs internet. Marking the register works offline.'
-      )
-    } finally {
-      setAvailableLoading(false)
-    }
-  }, [])
-
   useEffect(() => {
     async function init() {
       setLoading(true)
@@ -172,7 +109,6 @@ export default function Teacher() {
         classIdRef.current = resolvedClassId
         await loadStudents(resolvedClassId)
         await loadQueue(resolvedClassId)
-        await loadAvailableStudents(sid, resolvedClassId)
       } catch (err) {
         console.error('Failed to resolve school/class context:', err)
         setContextError(
@@ -274,29 +210,6 @@ export default function Teacher() {
   setSyncing(false)
 }
 
-  async function handleAddExistingStudent(studentId) {
-    setAddingStudentId(studentId)
-    try {
-      await client.graphql({
-        query: updateStudentClassMutation,
-        variables: {
-          input: {
-            id: studentId,
-            class_id: classIdRef.current,
-            updated_at: new Date().toISOString(),
-          },
-        },
-      })
-      await loadStudents(classIdRef.current)
-      await loadAvailableStudents(schoolId, classIdRef.current)
-    } catch (err) {
-      console.error('Failed to add student to class:', err)
-      setAvailableError(err.message || 'Failed to add student')
-    } finally {
-      setAddingStudentId(null)
-    }
-  }
-
   if (loading) {
     return <LoadingScreen message="Loading your class…" />
   }
@@ -329,7 +242,6 @@ export default function Teacher() {
     <AppShell
       nav={[
         { href: '#register', label: 'Mark attendance', icon: 'register', active: true },
-        { href: '#add-students', label: 'Add students', icon: 'addStudent' },
       ]}
       user={{ name: teacherName || 'Teacher', role: `Teacher · ${schoolName(schoolId)}` }}
       status={`${syncedCount}/${students.length} synced`}
@@ -382,7 +294,6 @@ export default function Teacher() {
                       classIdRef.current = newClassId
                       await loadStudents(newClassId)
                       await loadQueue(newClassId)
-                      await loadAvailableStudents(schoolId, newClassId)
                     }}
                   >
                     {myClasses.map((c) => (
@@ -436,7 +347,7 @@ export default function Teacher() {
               {students.length === 0 && (
                 <tr>
                   <td colSpan={3} className="subtext">
-                    No students in this class yet — add some below.
+                    No students in this class yet. Your school admin adds students to classes.
                   </td>
                 </tr>
               )}
@@ -477,31 +388,6 @@ export default function Teacher() {
             </tbody>
           </table>
         </div>
-      </section>
-
-      <section className="card" id="add-students">
-        <h2>Add existing students to my class</h2>
-        <p className="subtext">Students in your school who are not in any class yet.</p>
-        {availableLoading && <p className="subtext">Loading…</p>}
-        {availableError && <p className="text-error">{availableError}</p>}
-        {!availableLoading && availableStudents.length === 0 && (
-          <p className="subtext">No other students in this school to add.</p>
-        )}
-        {availableStudents.map((s) => (
-          <div
-            key={s.id}
-            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '1px solid var(--sand)' }}
-          >
-            <span>{s.first_name} {s.last_name}</span>
-            <button
-              onClick={() => handleAddExistingStudent(s.id)}
-              disabled={addingStudentId === s.id}
-              className="btn-small"
-            >
-              {addingStudentId === s.id ? 'Adding…' : 'Add to my class'}
-            </button>
-          </div>
-        ))}
       </section>
     </AppShell>
   )
