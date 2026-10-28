@@ -3,12 +3,14 @@
  *
  * Covers: only Angaza callers allowed, listing skips Angaza accounts,
  * creating an admin puts them in the Admin group for the right school,
- * and disable/enable/reset refuse anyone who isn't a school admin.
+ * disable/enable/reset refuse anyone who isn't a school admin, and Angaza
+ * can add schools that every admin can then read.
  *
  * Run: npx jest manageSchoolAdmins.test.js
  */
 
 const mockSend = jest.fn();
+const mockDbSend = jest.fn();
 
 jest.mock('@aws-sdk/client-cognito-identity-provider', () => {
   const command = (type) => jest.fn((params) => ({ type, ...params }));
@@ -25,7 +27,18 @@ jest.mock('@aws-sdk/client-cognito-identity-provider', () => {
   };
 });
 
+jest.mock('@aws-sdk/client-dynamodb', () => ({ DynamoDBClient: jest.fn() }));
+jest.mock('@aws-sdk/lib-dynamodb', () => {
+  const command = (type) => jest.fn((params) => ({ type, ...params }));
+  return {
+    DynamoDBDocumentClient: { from: () => ({ send: mockDbSend }) },
+    ScanCommand: command('Scan'),
+    PutCommand: command('Put'),
+  };
+});
+
 process.env.USER_POOL_ID = 'pool-test';
+process.env.SCHOOLS_TABLE = 'schools-test';
 const { handler } = require('./index');
 
 const ANGAZA = { claims: { 'custom:school_id': 'ANGAZA', 'cognito:groups': ['Admin'] } };
@@ -53,7 +66,10 @@ function sent(type) {
   return mockSend.mock.calls.map(([c]) => c).filter((c) => c.type === type);
 }
 
-beforeEach(() => mockSend.mockReset());
+beforeEach(() => {
+  mockSend.mockReset();
+  mockDbSend.mockReset();
+});
 
 test('a school admin cannot use it', async () => {
   await expect(call({ action: 'LIST' }, SCHOOL_ADMIN)).rejects.toThrow(/Only Angaza/);
@@ -158,4 +174,65 @@ test('a school admin with an access token is still refused', async () => {
   mockSend.mockResolvedValueOnce({ UserAttributes: [{ Name: 'custom:school_id', Value: 'SCH01' }] });
   const identity = { username: 'sch01-admin', claims: { 'cognito:groups': ['Admin'] } };
   await expect(call({ action: 'LIST' }, identity)).rejects.toThrow(/Only Angaza/);
+});
+
+const TEACHER = { claims: { 'custom:school_id': 'SCH01', 'cognito:groups': ['Teacher'] } };
+const NEW_SCHOOL = { action: 'CREATE_SCHOOL', school_name: 'Kilimani Day School', school_type: 'Mixed', county: 'Nairobi' };
+
+function dbSent(type) {
+  return mockDbSend.mock.calls.map(([c]) => c).filter((c) => c.type === type);
+}
+
+test('CREATE_SCHOOL gives the first new school SCH06', async () => {
+  mockDbSend.mockResolvedValueOnce({ Items: [] }).mockResolvedValueOnce({});
+  const res = await call(NEW_SCHOOL);
+  expect(res.school).toMatchObject({ school_id: 'SCH06', name: 'Kilimani Day School', type: 'Mixed', county: 'Nairobi' });
+  const [put] = dbSent('Put');
+  expect(put.TableName).toBe('schools-test');
+  expect(put.ConditionExpression).toBe('attribute_not_exists(school_id)');
+});
+
+test('CREATE_SCHOOL numbers after schools already added', async () => {
+  mockDbSend
+    .mockResolvedValueOnce({ Items: [{ school_id: 'SCH06', name: 'A' }, { school_id: 'SCH09', name: 'B' }] })
+    .mockResolvedValueOnce({});
+  const res = await call(NEW_SCHOOL);
+  expect(res.school.school_id).toBe('SCH10');
+});
+
+test('CREATE_SCHOOL refuses a name already in the network', async () => {
+  mockDbSend.mockResolvedValueOnce({ Items: [{ school_id: 'SCH06', name: 'kilimani day school' }] });
+  await expect(call(NEW_SCHOOL)).rejects.toThrow(/already in the network/);
+  expect(dbSent('Put')).toHaveLength(0);
+});
+
+test('CREATE_SCHOOL checks the name, type and county', async () => {
+  await expect(call({ ...NEW_SCHOOL, school_name: ' ' })).rejects.toThrow(/name is required/);
+  await expect(call({ ...NEW_SCHOOL, school_type: 'Other' })).rejects.toThrow(/Mixed, Girls or Boys/);
+  await expect(call({ ...NEW_SCHOOL, county: '' })).rejects.toThrow(/county is required/);
+  expect(mockDbSend).not.toHaveBeenCalled();
+});
+
+test('CREATE_SCHOOL explains a clash with a school added at the same moment', async () => {
+  const clash = Object.assign(new Error('clash'), { name: 'ConditionalCheckFailedException' });
+  mockDbSend.mockResolvedValueOnce({ Items: [] }).mockRejectedValueOnce(clash);
+  await expect(call(NEW_SCHOOL)).rejects.toThrow(/try again/);
+});
+
+test('a school admin cannot add a school', async () => {
+  await expect(call(NEW_SCHOOL, SCHOOL_ADMIN)).rejects.toThrow(/Only Angaza/);
+  expect(mockDbSend).not.toHaveBeenCalled();
+});
+
+test('LIST_SCHOOLS is open to every admin, across pages, sorted', async () => {
+  mockDbSend
+    .mockResolvedValueOnce({ Items: [{ school_id: 'SCH07', name: 'B' }], LastEvaluatedKey: { school_id: 'SCH07' } })
+    .mockResolvedValueOnce({ Items: [{ school_id: 'SCH06', name: 'A' }] });
+  const res = await call({ action: 'LIST_SCHOOLS' }, SCHOOL_ADMIN);
+  expect(res.schools.map((s) => s.school_id)).toEqual(['SCH06', 'SCH07']);
+  expect(mockSend).not.toHaveBeenCalled();
+});
+
+test('LIST_SCHOOLS refuses a teacher', async () => {
+  await expect(call({ action: 'LIST_SCHOOLS' }, TEACHER)).rejects.toThrow(/Only admins/);
 });

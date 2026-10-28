@@ -911,7 +911,7 @@ export default function ClassManagement() {
                         ))}
                       </select>
                     </td>
-                    <td style={{ fontSize: 12, color: s.status === 'INACTIVE' ? 'var(--red)' : 'var(--green-2)' }}>
+                    <td style={{ fontSize: 12, color: s.status === 'INACTIVE' ? 'var(--red)' : 'var(--green-ink)' }}>
                       {s.status || 'ACTIVE'}
                     </td>
                     <td>

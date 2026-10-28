@@ -8,6 +8,9 @@
  *   CREATE          a new admin login for a school (returns a temporary password)
  *   DISABLE/ENABLE  block or restore a school admin's sign-in
  *   RESET_PASSWORD  issue a new temporary password
+ *   CREATE_SCHOOL   add a school to the network (gets the next id, SCH06, ...)
+ *   LIST_SCHOOLS    schools added this way; any admin may read them, so a new
+ *                   school's admin sees its name (the first five are built in)
  *
  * A school admin is a Cognito user in the Admin group whose custom:school_id
  * is a real school. Only Angaza callers are allowed, checked here from the
@@ -26,14 +29,22 @@ const {
   AdminEnableUserCommand,
   AdminSetUserPasswordCommand,
 } = require('@aws-sdk/client-cognito-identity-provider');
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, ScanCommand, PutCommand } = require('@aws-sdk/lib-dynamodb');
 
 const cognito = new CognitoIdentityProviderClient({});
+const doc = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 const USER_POOL_ID = process.env.USER_POOL_ID;
+const SCHOOLS_TABLE = process.env.SCHOOLS_TABLE;
 const NETWORK_SCHOOL_ID = 'ANGAZA';
 const ADMIN_GROUP = 'Admin';
 const SCHOOL_ID_PATTERN = /^SCH\d{2,}$/;
 const PHONE_PATTERN = /^\+254\d{9}$/;
+// The pilot schools live in the app (frontend/src/lib/schools.js); new ones
+// are numbered after them.
+const BUILT_IN_SCHOOL_IDS = ['SCH01', 'SCH02', 'SCH03', 'SCH04', 'SCH05'];
+const SCHOOL_TYPES = ['Mixed', 'Girls', 'Boys'];
 
 // Same rules as createTeacherAccount: the pool needs 10+ characters with
 // upper, lower and a digit. Look-alike characters are left out because the
@@ -81,6 +92,61 @@ async function assertAngazaCaller(identity) {
   if (schoolId !== NETWORK_SCHOOL_ID || !groups.includes(ADMIN_GROUP)) {
     throw new Error('Only Angaza accounts can manage school admins.');
   }
+}
+
+function assertAdminCaller(identity) {
+  const groups = identity?.claims?.['cognito:groups'] || identity?.groups || [];
+  if (!groups.includes(ADMIN_GROUP)) throw new Error('Only admins can read the school list.');
+}
+
+async function listSchools() {
+  const schools = [];
+  let ExclusiveStartKey;
+  do {
+    const res = await doc.send(new ScanCommand({ TableName: SCHOOLS_TABLE, ExclusiveStartKey }));
+    schools.push(...(res.Items || []));
+    ExclusiveStartKey = res.LastEvaluatedKey;
+  } while (ExclusiveStartKey);
+  return schools.sort((a, b) => a.school_id.localeCompare(b.school_id));
+}
+
+function nextSchoolId(existingIds) {
+  const highest = Math.max(...existingIds.map((id) => Number(id.slice(3)) || 0));
+  return `SCH${String(highest + 1).padStart(2, '0')}`;
+}
+
+async function createSchool({ school_name, school_type, county }) {
+  const name = (school_name || '').trim();
+  const place = (county || '').trim();
+  if (!name) throw new Error('The school name is required.');
+  if (name.length > 80) throw new Error('Keep the school name under 80 characters.');
+  if (!SCHOOL_TYPES.includes(school_type)) throw new Error('Pick Mixed, Girls or Boys.');
+  if (!place) throw new Error('The county is required.');
+
+  const existing = await listSchools();
+  if (existing.some((s) => s.name.toLowerCase() === name.toLowerCase())) {
+    throw new Error(`${name} is already in the network.`);
+  }
+  const school = {
+    school_id: nextSchoolId([...BUILT_IN_SCHOOL_IDS, ...existing.map((s) => s.school_id)]),
+    name,
+    type: school_type,
+    county: place,
+    created_at: new Date().toISOString(),
+  };
+  try {
+    await doc.send(new PutCommand({
+      TableName: SCHOOLS_TABLE,
+      Item: school,
+      ConditionExpression: 'attribute_not_exists(school_id)',
+    }));
+  } catch (err) {
+    if (err.name === 'ConditionalCheckFailedException') {
+      throw new Error('Another school was added at the same moment. Please try again.');
+    }
+    throw err;
+  }
+  return { school };
 }
 
 async function listSchoolAdmins() {
@@ -149,14 +215,20 @@ async function createSchoolAdmin({ school_id, first_name, last_name, phone_numbe
 }
 
 exports.handler = async (event) => {
-  await assertAngazaCaller(event.identity);
   const input = event.arguments?.input || {};
+  if (input.action === 'LIST_SCHOOLS') {
+    assertAdminCaller(event.identity);
+    return { schools: await listSchools() };
+  }
+  await assertAngazaCaller(event.identity);
 
   switch (input.action) {
     case 'LIST':
       return { admins: await listSchoolAdmins() };
     case 'CREATE':
       return createSchoolAdmin(input);
+    case 'CREATE_SCHOOL':
+      return createSchool(input);
     case 'DISABLE': {
       const admin = await getSchoolAdmin(input.username);
       await cognito.send(new AdminDisableUserCommand({ UserPoolId: USER_POOL_ID, Username: admin.username }));
