@@ -3,6 +3,8 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { signOut } from 'aws-amplify/auth'
 import { initials } from '../lib/display'
 import { getTheme, setTheme } from '../lib/theme'
+import { startIdleWatch } from '../lib/idleSignOut'
+import { syncPendingAttendance } from '../lib/syncEngine'
 
 const ICONS = {
   dashboard: <><rect x="3" y="3" width="7" height="9" rx="2" /><rect x="14" y="3" width="7" height="5" rx="2" /><rect x="14" y="12" width="7" height="9" rx="2" /><rect x="3" y="16" width="7" height="5" rx="2" /></>,
@@ -59,6 +61,16 @@ export default function AppShell({ nav, user, status, children }) {
       window.removeEventListener('offline', goOffline)
     }
   }, [])
+
+  // Marks still waiting on this device are sent first, so nothing is left
+  // behind for the next person to sign in.
+  useEffect(() => startIdleWatch({
+    onIdle: async () => {
+      await syncPendingAttendance().catch(() => {})
+      await signOut()
+      navigate('/login?signedOut=idle')
+    },
+  }), [navigate])
 
   function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark'

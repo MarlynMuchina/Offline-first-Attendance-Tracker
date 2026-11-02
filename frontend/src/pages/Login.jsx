@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { signIn, confirmSignIn, signOut } from 'aws-amplify/auth'
 import { getSignedInSession } from '../lib/auth'
+import { idleTooLong } from '../lib/idleSignOut'
 import { NETWORK_SCHOOL_ID } from '../lib/schools'
 import { greetingFor } from '../lib/display'
 import { BrandMark } from '../components/AppShell'
@@ -27,9 +28,22 @@ export default function Login() {
   // register without internet.
   const [continuePath, setContinuePath] = useState(null)
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const [idleSignedOut, setIdleSignedOut] = useState(false)
+  const signedOutIdle = idleSignedOut || searchParams.get('signedOut') === 'idle'
 
   useEffect(() => {
-    homePathForCurrentUser().then(setContinuePath).catch(() => setContinuePath(null))
+    async function check() {
+      // Left signed in and unused for too long: sign out instead of offering
+      // Continue. Offline, Continue stays, so the register still opens.
+      if (navigator.onLine && idleTooLong()) {
+        await signOut().catch(() => {})
+        setIdleSignedOut(true)
+        return
+      }
+      homePathForCurrentUser().then(setContinuePath).catch(() => setContinuePath(null))
+    }
+    check()
   }, [])
 
   async function handleSubmit(e) {
@@ -153,6 +167,11 @@ export default function Login() {
             <h2>{greetingFor()}</h2>
             <p className="subtext" style={{ margin: '4px 0 0' }}>Sign in to Student Attendance Tracker</p>
           </div>
+          {signedOutIdle && !continuePath && (
+            <p className="notice-box" style={{ margin: 0 }}>
+              You were signed out after 15 minutes without use. Sign in again to continue.
+            </p>
+          )}
           {continuePath && (
             <div className="notice-box signed-in-box">
               <div>
