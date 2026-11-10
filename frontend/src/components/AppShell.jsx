@@ -29,10 +29,7 @@ export function Icon({ name, size = 18 }) {
 export function BrandMark({ size = 40 }) {
   return (
     <span className="brand-mark" style={{ width: size, height: size }}>
-      <svg width={size * 0.55} height={size * 0.55} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M20 6L9 17l-5-5" />
-      </svg>
+      <img src="/angaza-mark-white.png" alt="Angaza Center" />
     </span>
   )
 }

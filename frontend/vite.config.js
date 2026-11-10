@@ -16,13 +16,14 @@ export default defineConfig({
         name: 'Student Attendance Tracker',
         short_name: 'Attendance',
         description: 'Offline-first attendance tracker for rural schools',
-        theme_color: '#1F4D3A',
-        background_color: '#F6F2EA',
+        theme_color: '#00639F',
+        background_color: '#F3F6F8',
         display: 'standalone',
         start_url: '/login',
         icons: [
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' }
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
         ]
       }
     })
