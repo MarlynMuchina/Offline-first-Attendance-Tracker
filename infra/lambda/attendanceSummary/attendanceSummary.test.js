@@ -174,6 +174,26 @@ describe('attendanceSummary handler', () => {
     expect(promptText).toContain('Students below 70% attendance: none');
   });
 
+  test('reasons go in as class totals, never next to a student name', async () => {
+    const reasonRecords = [
+      { student_id: 'S001', status: 'ABSENT', reason_code: 'SICK', date: '2026-06-01' },
+      { student_id: 'S001', status: 'ABSENT', reason_code: 'UNEXCUSED', date: '2026-06-02' },
+      { student_id: 'S001', status: 'LATE', reason_code: 'TRANSPORT', date: '2026-06-03' },
+    ];
+    mockDocSend
+      .mockResolvedValueOnce({ Items: [STUDENTS[0]] })
+      .mockResolvedValueOnce({ Items: reasonRecords });
+    mockBedrockSend.mockResolvedValue(bedrockResponseFor('summary text'));
+
+    await handler({ arguments: { input: VALID_INPUT }, identity: SCH01_CALLER });
+
+    const promptText = JSON.parse(mockBedrockSend.mock.calls[0][0].body).messages[0].content;
+    expect(promptText).toContain('"absences":{"Sick":1,"Not given":1}');
+    expect(promptText).toContain('"late_arrivals":{"Distance or transport":1}');
+    const datasetPart = promptText.split('Reasons teachers gave')[0];
+    expect(datasetPart).not.toContain('Sick');
+  });
+
   test('a student with zero records in range gets a null attendance_rate, not a divide-by-zero error', async () => {
     mockDocSend
       .mockResolvedValueOnce({ Items: STUDENTS })

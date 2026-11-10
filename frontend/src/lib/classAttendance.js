@@ -21,6 +21,7 @@ const byClassDateQuery = /* GraphQL */ `
         student_id
         date
         status
+        reason_code
       }
       nextToken
     }
@@ -42,6 +43,7 @@ const listQuery = /* GraphQL */ `
         student_id
         date
         status
+        reason_code
       }
       nextToken
     }
