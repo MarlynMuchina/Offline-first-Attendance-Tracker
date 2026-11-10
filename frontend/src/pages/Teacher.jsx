@@ -10,6 +10,8 @@ import { loadTeacherClasses } from '../lib/teacherClasses'
 import { fromServer } from '../lib/network'
 import { schoolName } from '../lib/schools'
 import { greetingFor, formatDay } from '../lib/display'
+import { reasonsFor, absencesToFollowUp, FOLLOW_UP_DAYS } from '../lib/reasons'
+import { fetchClassAttendance } from '../lib/classAttendance'
 import AppShell, { Ring, LoadingScreen } from '../components/AppShell'
 
 const client = generateClient()
@@ -30,6 +32,21 @@ const listStudentsQuery = /* GraphQL */ `
 
 const today = () => new Date().toISOString().split('T')[0]
 
+function daysAgo(n) {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return d.toISOString().split('T')[0]
+}
+
+// Re-marks before the first sync reuse the queue entry's client_request_id,
+// so retries count as one idempotent write. Once it has synced, a change
+// needs a new id, or the server would treat it as a replay of the old write
+// and keep the old status.
+function nextRequestId(record) {
+  if (record.client_request_id && record.sync_status !== 'SYNCED') return record.client_request_id
+  return crypto.randomUUID()
+}
+
 const MARK_OPTIONS = [
   { status: 'PRESENT', label: 'Present' },
   { status: 'ABSENT', label: 'Absent' },
@@ -49,6 +66,9 @@ export default function Teacher() {
   const [contextError, setContextError] = useState('')
   const [classesSavedAt, setClassesSavedAt] = useState(null)
   const classIdRef = useRef(null)
+
+  const [followUps, setFollowUps] = useState([])
+  const [followUpNote, setFollowUpNote] = useState('')
 
   const [teacherName, setTeacherName] = useState('')
   const [myClasses, setMyClasses] = useState([])
@@ -78,11 +98,34 @@ export default function Teacher() {
         await db.students.bulkPut(fresh)
       })
       setStudents(fresh)
+      return fresh
     } catch (err) {
       console.warn('Could not fetch roster from server, using local cache:', err.message)
       const cached = await db.students.where('class_id').equals(resolvedClassId).toArray()
       setStudents(cached)
+      return cached
     }
+  }, [])
+
+  // Absences from the last two weeks that still have no reason. Uses the
+  // server's records when online (absences marked on another phone count
+  // too) and always the ones on this device.
+  const loadFollowUps = useCallback(async (resolvedClassId, roster) => {
+    const since = daysAgo(FOLLOW_UP_DAYS)
+    const local = await db.attendanceQueue
+      .where('class_id')
+      .equals(resolvedClassId)
+      .and((r) => r.date >= since)
+      .toArray()
+    const remote = await fromServer(
+      () => fetchClassAttendance((request) => client.graphql(request), {
+        classId: resolvedClassId,
+        startDate: since,
+        endDate: today(),
+      }),
+      15000
+    ).catch(() => [])
+    setFollowUps(absencesToFollowUp({ local, remote, students: roster, since }))
   }, [])
 
   const loadQueue = useCallback(async (resolvedClassId) => {
@@ -107,8 +150,9 @@ export default function Teacher() {
         const resolvedClassId = classes[0].id
         setClassId(resolvedClassId)
         classIdRef.current = resolvedClassId
-        await loadStudents(resolvedClassId)
+        const roster = await loadStudents(resolvedClassId)
         await loadQueue(resolvedClassId)
+        loadFollowUps(resolvedClassId, roster)
       } catch (err) {
         console.error('Failed to resolve school/class context:', err)
         setContextError(
@@ -153,7 +197,7 @@ export default function Teacher() {
       }
     }
     init()
-  }, [loadStudents, loadQueue])
+  }, [loadStudents, loadQueue, loadFollowUps])
 
     async function markStatus(studentId, status) {
     const markedAt = new Date().toISOString()
@@ -172,12 +216,11 @@ export default function Teacher() {
     if (existing) {
       await db.attendanceQueue.update(existing.localId, {
         status,
+        // A reason only fits the status it was picked for.
+        reason_code: existing.status === status ? existing.reason_code ?? null : null,
         marked_at: markedAt,
         sync_status: 'PENDING',
-        // Reuse the same client_request_id across edits to the same queue
-        // entry, so retries and re-marks before the first sync completes
-        // still count as one idempotent write, not a race of duplicates.
-        client_request_id: existing.client_request_id || crypto.randomUUID(),
+        client_request_id: nextRequestId(existing),
       })
     } else {
       await db.attendanceQueue.add({
@@ -185,6 +228,7 @@ export default function Teacher() {
         class_id: classId,
         date: today(),
         status,
+        reason_code: null,
         marked_at: markedAt,
         marked_by: userId,
         sync_status: 'PENDING',
@@ -194,7 +238,66 @@ export default function Teacher() {
     }
 
     await loadQueue(classIdRef.current)
+    loadFollowUps(classIdRef.current, students)
     syncPendingAttendance().then(() => loadQueue(classIdRef.current)) // fire-and-forget; refresh status once it settles
+  }
+
+  // Optional reason for an Absent or Late mark. Changing it is a new write,
+  // so the record syncs again.
+  async function setReason(record, reasonCode) {
+    await db.attendanceQueue.update(record.localId, {
+      reason_code: reasonCode || null,
+      marked_at: new Date().toISOString(),
+      sync_status: 'PENDING',
+      client_request_id: nextRequestId(record),
+    })
+    await loadQueue(classIdRef.current)
+    syncPendingAttendance().then(() => loadQueue(classIdRef.current))
+  }
+
+  // Reason for an earlier absence, once the student or a parent explains.
+  // Saved on the device and sent like a mark, so it works offline too.
+  async function setAbsenceReason(item, reasonCode) {
+    if (!reasonCode) return
+    const markedAt = new Date().toISOString()
+    const existing = await db.attendanceQueue
+      .where('class_id')
+      .equals(classIdRef.current)
+      .and((r) => r.student_id === item.student_id && r.date === item.date)
+      .first()
+    if (existing) {
+      await db.attendanceQueue.update(existing.localId, {
+        status: 'ABSENT',
+        reason_code: reasonCode,
+        marked_at: markedAt,
+        sync_status: 'PENDING',
+        client_request_id: nextRequestId(existing),
+      })
+    } else {
+      let userId = 'unknown'
+      try {
+        userId = (await getCurrentUserContext()).userId
+      } catch {
+        // still saved; it syncs with the next sign-in
+      }
+      await db.attendanceQueue.add({
+        student_id: item.student_id,
+        class_id: classIdRef.current,
+        date: item.date,
+        status: 'ABSENT',
+        reason_code: reasonCode,
+        marked_at: markedAt,
+        marked_by: userId,
+        sync_status: 'PENDING',
+        remote_id: item.id || null,
+        client_request_id: crypto.randomUUID(),
+      })
+    }
+    const label = reasonsFor('ABSENT').find((r) => r.code === reasonCode)?.label
+    setFollowUpNote(`Saved: ${item.name}, ${formatDay(item.date)}, ${label}.${navigator.onLine ? '' : ' It syncs when you are back online.'}`)
+    setFollowUps((list) => list.filter((r) => !(r.student_id === item.student_id && r.date === item.date)))
+    await loadQueue(classIdRef.current)
+    syncPendingAttendance().then(() => loadQueue(classIdRef.current))
   }
 
   async function markAllPresent() {
@@ -242,6 +345,7 @@ export default function Teacher() {
     <AppShell
       nav={[
         { href: '#register', label: 'Mark attendance', icon: 'register', active: true },
+        { href: '#follow-up', label: `Follow up (${followUps.length})`, icon: 'classes' },
       ]}
       user={{ name: teacherName || 'Teacher', role: `Teacher · ${schoolName(schoolId)}` }}
       status={`${syncedCount}/${students.length} synced`}
@@ -292,8 +396,9 @@ export default function Teacher() {
                       const newClassId = e.target.value
                       setClassId(newClassId)
                       classIdRef.current = newClassId
-                      await loadStudents(newClassId)
+                      const roster = await loadStudents(newClassId)
                       await loadQueue(newClassId)
+                      loadFollowUps(newClassId, roster)
                     }}
                   >
                     {myClasses.map((c) => (
@@ -374,6 +479,21 @@ export default function Teacher() {
                           </label>
                         ))}
                       </div>
+                      {record?.status === 'LATE' && (
+                        <label className="reason-pick">
+                          <span>Reason</span>
+                          <select
+                            value={record.reason_code || ''}
+                            onChange={(e) => setReason(record, e.target.value)}
+                            aria-label={`Reason ${studentName} was late`}
+                          >
+                            <option value="">Not given</option>
+                            {reasonsFor(record.status).map((r) => (
+                              <option key={r.code} value={r.code}>{r.label}</option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
                     </td>
                     <td style={{ textAlign: 'right' }}>
                       {!record && <span className="pill pill-gray">Not marked</span>}
@@ -388,6 +508,50 @@ export default function Teacher() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="card" id="follow-up">
+        <h2>Absences to follow up <span className="count">({followUps.length})</span></h2>
+        <p className="subtext">
+          Absences from the last {FOLLOW_UP_DAYS} days with no reason yet. When the student comes back with a note, or a
+          parent calls, pick the reason here. It's optional.
+        </p>
+        {followUpNote && <p className="notice-box" style={{ margin: '0 0 12px' }}>{followUpNote}</p>}
+        {followUps.length === 0 ? (
+          <p className="subtext" style={{ margin: 0 }}>Nothing to follow up.</p>
+        ) : (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Absent on</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {followUps.map((item) => (
+                  <tr key={`${item.student_id}|${item.date}`}>
+                    <td style={{ fontWeight: 600 }}>{item.name}</td>
+                    <td>{item.date === today() ? 'Today' : formatDay(item.date)}</td>
+                    <td>
+                      <select
+                        defaultValue=""
+                        onChange={(e) => setAbsenceReason(item, e.target.value)}
+                        aria-label={`Reason ${item.name} was absent on ${formatDay(item.date)}`}
+                      >
+                        <option value="" disabled>Not known yet</option>
+                        {reasonsFor('ABSENT').map((r) => (
+                          <option key={r.code} value={r.code}>{r.label}</option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </AppShell>
   )

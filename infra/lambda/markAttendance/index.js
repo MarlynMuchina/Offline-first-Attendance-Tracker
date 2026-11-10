@@ -13,6 +13,16 @@ const TABLE_NAME = process.env.TABLE_NAME;
 const STUDENT_TABLE = process.env.STUDENT_TABLE;
 const USER_POOL_ID = process.env.USER_POOL_ID;
 const VALID_STATUSES = ['PRESENT', 'ABSENT', 'LATE'];
+// Optional reason for an absence or a late arrival. Same lists as
+// frontend/src/lib/reasons.js. Anything else is stored as no reason.
+const VALID_REASONS = {
+  ABSENT: ['SICK', 'FEES', 'HOME_DUTIES', 'TRANSPORT', 'WEATHER', 'OTHER'],
+  LATE: ['TRANSPORT', 'CHORES', 'WEATHER', 'OTHER'],
+};
+
+function cleanReason(status, code) {
+  return (VALID_REASONS[status] || []).includes(code) ? code : null;
+}
 
 // AppSync signs calls with the access token, which carries the groups but
 // not custom:school_id, so the caller's school is read from Cognito. It
@@ -57,6 +67,7 @@ async function emitAuditEvent(action, input, recordId) {
           class_id: input.class_id,
           date: input.date,
           status: input.status,
+          reason_code: cleanReason(input.status, input.reason_code),
           marked_by: input.marked_by,
           marked_at: input.marked_at,
           client_request_id: input.client_request_id,
@@ -127,14 +138,20 @@ exports.handler = async (event) => {
   }
 
   const now = new Date().toISOString();
+  const reasonCode = cleanReason(input.status, input.reason_code);
 
   if (existingRecord) {
     await doc.send(new UpdateCommand({
       TableName: TABLE_NAME,
       Key: { id: existingRecord.id },
-      UpdateExpression: 'SET #s = :status, marked_at = :marked_at, marked_by = :marked_by, client_request_id = :crid, updated_at = :updated_at REMOVE createdAt, updatedAt',
+      // A new mark replaces the old reason too, so a student marked Present
+      // after being Absent doesn't keep the absence reason.
+      UpdateExpression: reasonCode
+        ? 'SET #s = :status, reason_code = :reason, marked_at = :marked_at, marked_by = :marked_by, client_request_id = :crid, updated_at = :updated_at REMOVE createdAt, updatedAt'
+        : 'SET #s = :status, marked_at = :marked_at, marked_by = :marked_by, client_request_id = :crid, updated_at = :updated_at REMOVE reason_code, createdAt, updatedAt',
       ExpressionAttributeNames: { '#s': 'status' },
       ExpressionAttributeValues: {
+        ...(reasonCode ? { ':reason': reasonCode } : {}),
         ':status': input.status,
         ':marked_at': input.marked_at,
         ':marked_by': input.marked_by,
@@ -157,6 +174,7 @@ exports.handler = async (event) => {
       class_id: input.class_id,
       date: input.date,
       status: input.status,
+      ...(reasonCode ? { reason_code: reasonCode } : {}),
       marked_by: input.marked_by,
       marked_at: input.marked_at,
       client_request_id: input.client_request_id,

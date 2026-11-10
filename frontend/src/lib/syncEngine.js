@@ -37,6 +37,9 @@ async function syncRecord(record, schoolId, userId) {
           marked_by: userId,
           marked_at: record.marked_at,
           client_request_id: record.client_request_id,
+          // Only sent when a reason was picked, so marks without one work
+          // even against an API that doesn't know the field.
+          ...(record.reason_code ? { reason_code: record.reason_code } : {}),
         },
       },
     })

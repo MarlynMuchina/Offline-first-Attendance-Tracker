@@ -94,6 +94,21 @@ exports.handler = async (event) => {
     lates: s.late,
   }));
 
+  // Reasons teachers gave, as class totals only. Kept out of the per-student
+  // rows so the prompt never ties a reason such as "Sick" to a named student.
+  const REASON_LABELS = {
+    SICK: 'Sick', FEES: 'School fees', HOME_DUTIES: 'Home duties', TRANSPORT: 'Distance or transport',
+    WEATHER: 'Weather', CHORES: 'Morning chores', OTHER: 'Other',
+  };
+  const reasonTotals = { absences: {}, late_arrivals: {} };
+  for (const r of records.Items || []) {
+    if (!statsByStudent[r.student_id]) continue;
+    const group = r.status === 'ABSENT' ? reasonTotals.absences : r.status === 'LATE' ? reasonTotals.late_arrivals : null;
+    if (!group) continue;
+    const label = REASON_LABELS[r.reason_code] || 'Not given';
+    group[label] = (group[label] || 0) + 1;
+  }
+
   const belowThreshold = summaryRows.filter((s) => s.attendance_rate !== null && s.attendance_rate < 70);
 
   // 4. Prompt -- follows the CSG prompt template structure: role, allowed
@@ -107,6 +122,8 @@ Dataset (${start_date} to ${end_date}):
 ${JSON.stringify(summaryRows, null, 2)}
 
 Students below 70% attendance: ${belowThreshold.length > 0 ? JSON.stringify(belowThreshold) : 'none'}
+
+Reasons teachers gave (class totals; giving a reason is optional): ${JSON.stringify(reasonTotals)}
 
 Output format:
 1. Summary

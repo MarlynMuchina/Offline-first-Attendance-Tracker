@@ -153,3 +153,54 @@ describe('school checks', () => {
     await expect(handler({ arguments: { input: baseInput() } })).rejects.toThrow('Not signed in.');
   });
 });
+
+describe('absence and late reasons', () => {
+  test('stores a reason that fits the status', async () => {
+    ddbMock.on(QueryCommand).resolves({ Items: [] });
+    ddbMock.on(PutCommand).resolves({});
+
+    const event = { identity: CALLER, arguments: { input: baseInput({ status: 'ABSENT', reason_code: 'SICK' }) } };
+    await handler(event);
+
+    expect(ddbMock.commandCalls(PutCommand)[0].args[0].input.Item.reason_code).toBe('SICK');
+  });
+
+  test('leaves out a reason that does not fit the status', async () => {
+    ddbMock.on(QueryCommand).resolves({ Items: [] });
+    ddbMock.on(PutCommand).resolves({});
+
+    const event = { identity: CALLER, arguments: { input: baseInput({ status: 'LATE', reason_code: 'FEES' }) } };
+    await handler(event);
+
+    expect(ddbMock.commandCalls(PutCommand)[0].args[0].input.Item).not.toHaveProperty('reason_code');
+  });
+
+  test('a newer mark without a reason clears the old one', async () => {
+    ddbMock.on(QueryCommand).resolves({
+      Items: [{ id: 'existing-id', student_id: 'student-001', status: 'ABSENT', reason_code: 'SICK',
+        marked_at: '2026-09-05T08:00:00.000Z', client_request_id: 'req-different' }],
+    });
+    ddbMock.on(UpdateCommand).resolves({});
+
+    const event = { identity: CALLER, arguments: { input: baseInput({ status: 'PRESENT', marked_at: '2026-09-05T11:00:00.000Z' }) } };
+    await handler(event);
+
+    const update = ddbMock.commandCalls(UpdateCommand)[0].args[0].input;
+    expect(update.UpdateExpression).toMatch(/REMOVE reason_code/);
+  });
+
+  test('a newer mark with a reason sets it', async () => {
+    ddbMock.on(QueryCommand).resolves({
+      Items: [{ id: 'existing-id', student_id: 'student-001', status: 'ABSENT',
+        marked_at: '2026-09-05T08:00:00.000Z', client_request_id: 'req-different' }],
+    });
+    ddbMock.on(UpdateCommand).resolves({});
+
+    const event = { identity: CALLER, arguments: { input: baseInput({ status: 'ABSENT', reason_code: 'FEES', marked_at: '2026-09-05T11:00:00.000Z' }) } };
+    await handler(event);
+
+    const update = ddbMock.commandCalls(UpdateCommand)[0].args[0].input;
+    expect(update.UpdateExpression).toMatch(/reason_code = :reason/);
+    expect(update.ExpressionAttributeValues[':reason']).toBe('FEES');
+  });
+});

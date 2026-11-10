@@ -13,6 +13,7 @@ import { getChronicThreshold, getTermStart, getExamDate, defaultDateRange } from
 import { countSchoolDaysBetween, projectEligibility, EXAM_ATTENDANCE_REQUIRED } from '../lib/examEligibility'
 import { schoolName, refreshSchools } from '../lib/schools'
 import { greetingFor, formatDay, weeklyRates } from '../lib/display'
+import { summarizeReasons } from '../lib/reasons'
 import AppShell, { ADMIN_NAV, Ring, LoadingScreen } from '../components/AppShell'
 
 const client = generateClient()
@@ -145,7 +146,21 @@ function computeStats(students, records, threshold) {
     .filter((p) => p.rate !== null && p.rate < threshold)
     .sort((a, b) => a.rate - b.rate)
 
-  return { perStudent, overallRate, chronic, weekly: weeklyRates(records) }
+  return { perStudent, overallRate, chronic, weekly: weeklyRates(records), reasons: summarizeReasons(records) }
+}
+
+// The most common reason teachers gave for absences and lates, if any.
+function reasonLines(reasons) {
+  if (!reasons) return []
+  return [
+    ['ABSENT', 'absences'],
+    ['LATE', 'late arrivals'],
+  ].flatMap(([status, word]) => {
+    const group = reasons[status]
+    const top = group.rows.find((r) => r.code !== 'NOT_GIVEN' && r.count > 0)
+    if (!top) return []
+    return [`- Most common reason given for ${word}: ${top.label} (${top.count} of ${group.total}).`]
+  })
 }
 
 // Backup summary written on the device from the dashboard figures, used when
@@ -172,6 +187,7 @@ function buildDeviceSummary(stats, threshold, startDate, endDate) {
     `- ${perfect} student${perfect === 1 ? ' was' : 's were'} never absent.`,
     `- ${stats.chronic.length} student${stats.chronic.length === 1 ? ' is' : 's are'} below ${pct(threshold)}.`,
     `- Lowest attendance: ${lowest.map((p) => `${name(p)} (${pct(p.rate)})`).join(', ')}.`,
+    ...reasonLines(stats.reasons),
     '',
     '## Risks',
     belowExam.length > 0
@@ -889,6 +905,48 @@ useEffect(() => {
             Red is below the {(EXAM_ATTENDANCE_REQUIRED * 100).toFixed(1)}% exam line; amber is between that and {thresholdPct}%.
           </p>
         )}
+      </section>
+
+      <section className="card">
+        <h2>Why students were absent or late</h2>
+        <div className="reason-cols">
+          {[
+            ['ABSENT', 'Absences'],
+            ['LATE', 'Late arrivals'],
+          ].map(([status, title]) => {
+            const group = stats.reasons[status]
+            return (
+              <div key={status}>
+                <h3 className="reason-title">
+                  {title} <span className="count">({group.total}, reason given for {group.given})</span>
+                </h3>
+                {group.total === 0 ? (
+                  <p className="subtext">None in this range.</p>
+                ) : (
+                  <div className="week-bars">
+                    {group.rows.map((r) => (
+                      <div key={r.code} className="week-bar reason-bar">
+                        <span className="subtext" style={{ margin: 0 }}>{r.label}</span>
+                        <div className="week-bar-track">
+                          <div
+                            className={`week-bar-fill${r.code === 'NOT_GIVEN' ? ' is-muted' : status === 'ABSENT' ? ' is-absent' : ' is-late'}`}
+                            style={{ width: `${Math.round(r.share * 100)}%` }}
+                          />
+                        </div>
+                        <strong style={{ textAlign: 'right' }}>{r.count}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        <p className="subtext" style={{ margin: '14px 0 0' }}>
+          Teachers pick a late reason when the student walks in, and add an absence reason later, when the
+          student returns or a parent explains. Both are optional. "Not known yet" absences are still waiting
+          for a follow-up; older imported records have no reasons.
+        </p>
       </section>
 
       <div className={`card-grid${showResultsFullWidth ? ' card-grid-stack' : ''}`}>

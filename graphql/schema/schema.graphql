@@ -82,6 +82,7 @@ input MarkAttendanceInput {
   marked_by: ID!
   marked_at: AWSDateTime!
   client_request_id: String!
+  reason_code: String
 }
 
 type MarkAttendanceResult {

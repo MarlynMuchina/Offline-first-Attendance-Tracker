@@ -742,7 +742,42 @@ td {
   background: var(--amber);
 }
 
+.week-bar-fill.is-absent { background: var(--red); }
+.week-bar-fill.is-late { background: var(--amber); }
+.week-bar-fill.is-muted { background: var(--field-line); }
+
+.reason-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 28px;
+}
+
+.reason-title {
+  margin: 0 0 14px;
+  font-size: 15px;
+}
+
+.reason-bar {
+  grid-template-columns: 150px 1fr 36px;
+}
+
 /* ---------- Register (teacher) ---------- */
+
+.reason-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.reason-pick select {
+  font-size: 13px;
+  padding: 4px 8px;
+  max-width: 200px;
+}
 
 .mark-group {
   display: inline-flex;
