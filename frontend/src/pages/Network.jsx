@@ -10,6 +10,7 @@ import SchoolAdmins from '../components/SchoolAdmins'
 import AppShell, { Ring } from '../components/AppShell'
 import { greetingFor, formatDay, weeklyRates } from '../lib/display'
 import { TrendChart, RankBars } from '../components/Charts'
+import SchoolMap from '../components/SchoolMap'
 
 const client = generateClient()
 
@@ -270,6 +271,30 @@ export default function Network() {
               )}
             </section>
           </div>
+
+          <section className="card">
+            <h2>Where the schools are</h2>
+            <SchoolMap
+              schools={stats.schools.map((s) => ({
+                id: s.id,
+                name: schoolName(s.id),
+                county: allSchools()[s.id]?.county,
+                rate: s.rate,
+                students: s.students,
+                belowWarning: s.belowWarning,
+              }))}
+              warningLine={warningLine}
+              examLine={EXAM_ATTENDANCE_REQUIRED}
+            />
+            <p className="subtext chart-legend">
+              <span><span className="map-key map-key-ok" aria-hidden="true" /> {warningPct}% or more</span>
+              <span><span className="map-key map-key-warn" aria-hidden="true" /> Below {warningPct}%</span>
+              <span><span className="map-key map-key-exam" aria-hidden="true" /> Below the {examPct}% exam line</span>
+            </p>
+            <p className="subtext" style={{ margin: '6px 0 0' }}>
+              Each school is pinned at its county town. Select a pin for the school's attendance.
+            </p>
+          </section>
 
           <section className="card">
             <h2>Schools</h2>

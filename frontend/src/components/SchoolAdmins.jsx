@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { generateClient } from 'aws-amplify/api'
 import { allSchools, schoolName, rememberSchools } from '../lib/schools'
+import { COUNTY_NAMES } from '../lib/counties'
 
 const client = generateClient()
 
@@ -229,11 +230,14 @@ export default function SchoolAdmins({ onSchoolAdded }) {
         </label>
         <label className="subtext">
           County{' '}
-          <input
+          <select
             value={schoolForm.county}
             onChange={(e) => setSchoolForm({ ...schoolForm, county: e.target.value })}
             required
-          />
+          >
+            <option value="" disabled>Pick a county</option>
+            {COUNTY_NAMES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
         </label>
         <button type="submit" className="btn btn-small" disabled={busy !== null}>
           {busy === 'school' ? 'Adding…' : 'Add school'}
