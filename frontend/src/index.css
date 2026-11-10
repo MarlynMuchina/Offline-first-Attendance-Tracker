@@ -9,29 +9,33 @@
 }
 
 :root {
-  --green: #1F4D3A;
-  --green-2: #2F6A51;
-  --green-soft: #E6EFEA;
-  --green-text: #CFE0D7;
-  --marigold: #E8A33D;
-  --cream: #F6F2EA;
-  --sand: #F2ECDF;
-  --line: #EAE2D2;
-  --field: #FBF8F2;
-  --field-line: #E2D8C4;
-  --ink: #1B2A22;
-  --muted: #55645B;
-  --body: #3A4A40;
+  /* Angaza Center brand colours. The token names are older than the
+     palette: --green is the main brand blue, --marigold the teal accent. */
+  --green: #00639F;
+  --green-2: #2B7DB5;
+  --green-soft: #E3EFF7;
+  --green-text: #CFE3F0;
+  --marigold: #19B3C4;
+  --accent-ink: #06324F;
+  --amber: #E8A33D;
+  --cream: #F3F6F8;
+  --sand: #E9EFF2;
+  --line: #DCE4E8;
+  --field: #F8FAFB;
+  --field-line: #CDD8DE;
+  --ink: #1F2A33;
+  --muted: #5B6B77;
+  --body: #445460;
   --red: #C53030;
   --red-soft: #FDE2E2;
   --red-text: #9B1C1C;
   --amber-soft: #FDF0D5;
   --amber-text: #8A4B0B;
   --card: #fff;
-  --green-ink: #1F4D3A;
-  --dashed: #D9CDB4;
-  --notice-ink: #5A4A2A;
-  --ring-track: #EFE7D6;
+  --green-ink: #00639F;
+  --dashed: #B9C8D0;
+  --notice-ink: #3C4A55;
+  --ring-track: #E1E9EE;
   color-scheme: light;
 
   /* older names still used by a few inline styles */
@@ -45,29 +49,29 @@
   --radius: 22px;
 }
 
-/* Dark mode: same layout, darker surfaces. The green sidebar and the green
-   and marigold buttons keep their colours; green text gets lighter so it
+/* Dark mode: same layout, darker surfaces. The blue sidebar and the blue
+   and teal buttons keep their colours; blue text gets lighter so it
    stays readable on dark cards. */
 :root[data-theme='dark'] {
-  --cream: #111915;
-  --card: #1A2520;
-  --sand: #22302A;
-  --line: #2C3B33;
-  --field: #16201B;
-  --field-line: #34453B;
-  --ink: #E6EEE9;
-  --muted: #A2B1A8;
-  --body: #C9D4CD;
-  --green-ink: #8FD1AE;
-  --green-soft: #1F3A2E;
+  --cream: #0F1820;
+  --card: #17222C;
+  --sand: #1E2B36;
+  --line: #2A3946;
+  --field: #131D26;
+  --field-line: #344553;
+  --ink: #E6EDF2;
+  --muted: #9FB0BC;
+  --body: #C8D3DB;
+  --green-ink: #7CC3EE;
+  --green-soft: #16324A;
   --red: #DC4B4B;
   --red-soft: #3B1E1E;
   --red-text: #F4A7A7;
   --amber-soft: #3A2D16;
   --amber-text: #F2C67A;
-  --dashed: #3D4E44;
-  --notice-ink: #F2DDB4;
-  --ring-track: #2C3B33;
+  --dashed: #3A4B58;
+  --notice-ink: #D5E2EA;
+  --ring-track: #2A3946;
   color-scheme: dark;
 }
 
@@ -156,11 +160,11 @@ button:disabled {
 .btn-accent {
   background: var(--marigold);
   border-color: var(--marigold);
-  color: var(--green);
+  color: var(--accent-ink);
 }
 
 .btn-accent:hover:not(:disabled) {
-  background: #F2B544;
+  background: #3CC4D2;
 }
 
 .btn-danger {
@@ -430,12 +434,18 @@ td {
 
 .brand-mark {
   flex: none;
-  border-radius: 50%;
-  background: var(--marigold);
-  color: var(--green);
+  border-radius: 12px;
+  background: var(--green);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.brand-mark img {
+  display: block;
+  width: 82%;
+  height: 82%;
+  object-fit: contain;
 }
 
 .brand-text {
@@ -467,7 +477,7 @@ td {
   gap: 12px;
   padding: 12px 14px;
   border-radius: 14px;
-  color: #E3EEE8;
+  color: #E3EEF5;
   font-size: 14px;
   text-decoration: none;
 }
@@ -498,8 +508,8 @@ td {
 }
 
 .shell-status.is-offline {
-  background: var(--marigold);
-  color: var(--green);
+  background: var(--amber);
+  color: #1F2A33;
 }
 
 .shell-user {
@@ -516,7 +526,7 @@ td {
   height: 38px;
   border-radius: 50%;
   background: var(--marigold);
-  color: var(--green);
+  color: var(--accent-ink);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -544,7 +554,7 @@ td {
 
 .shell-signout {
   background: transparent;
-  color: #E3EEE8;
+  color: #E3EEF5;
   border: 1px solid var(--green-2);
   border-radius: 14px;
   padding: 10px 14px;
@@ -559,7 +569,7 @@ td {
   align-items: center;
   gap: 10px;
   background: transparent;
-  color: #E3EEE8;
+  color: #E3EEF5;
   border: none;
   border-radius: 14px;
   padding: 8px 14px;
@@ -729,7 +739,7 @@ td {
 }
 
 .week-bar-fill.is-low {
-  background: var(--marigold);
+  background: var(--amber);
 }
 
 /* ---------- Register (teacher) ---------- */
@@ -766,7 +776,7 @@ td {
 
 .mark.is-on.mark-present { background: var(--green); color: #fff; }
 .mark.is-on.mark-absent { background: var(--red); color: #fff; }
-.mark.is-on.mark-late { background: var(--marigold); color: var(--green); }
+.mark.is-on.mark-late { background: var(--amber); color: #1F2A33; }
 
 /* ---------- AI summary text ---------- */
 
