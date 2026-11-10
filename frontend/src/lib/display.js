@@ -44,3 +44,32 @@ export function weeklyRates(records) {
     .sort((a, b) => a.weekStart.localeCompare(b.weekStart))
     .map((w) => ({ ...w, rate: w.attended / w.total }))
 }
+
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+
+// Attendance rate for each school day of the week, Monday to Friday, so a
+// pattern such as low Fridays shows up. Days with no records have rate null.
+export function weekdayRates(records) {
+  const days = WEEKDAYS.map((name) => ({ day: name, total: 0, attended: 0 }))
+  for (const r of records) {
+    if (!r.date) continue
+    const [y, m, d] = r.date.split('-').map(Number)
+    const index = (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7
+    if (index > 4) continue
+    days[index].total += 1
+    if (r.status !== 'ABSENT') days[index].attended += 1
+  }
+  return days.map((d) => ({ ...d, rate: d.total > 0 ? d.attended / d.total : null }))
+}
+
+// How many marks were Present, Late and Absent, with each one's share.
+export function statusSplit(records) {
+  const counts = { PRESENT: 0, LATE: 0, ABSENT: 0 }
+  for (const r of records) if (r.status in counts) counts[r.status] += 1
+  const total = counts.PRESENT + counts.LATE + counts.ABSENT
+  return ['PRESENT', 'LATE', 'ABSENT'].map((status) => ({
+    status,
+    count: counts[status],
+    share: total > 0 ? counts[status] / total : 0,
+  }))
+}
