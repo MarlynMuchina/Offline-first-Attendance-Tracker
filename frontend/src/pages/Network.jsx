@@ -8,7 +8,8 @@ import { EXAM_ATTENDANCE_REQUIRED } from '../lib/examEligibility'
 import { allSchools, NETWORK_SCHOOL_ID, schoolName, refreshSchools } from '../lib/schools'
 import SchoolAdmins from '../components/SchoolAdmins'
 import AppShell, { Ring } from '../components/AppShell'
-import { greetingFor } from '../lib/display'
+import { greetingFor, formatDay, weeklyRates } from '../lib/display'
+import { TrendChart, RankBars } from '../components/Charts'
 
 const client = generateClient()
 
@@ -113,7 +114,7 @@ function buildNetworkStats(classes, students, records, warningLine) {
   })
 
   const total = summarise(enrolled.map((s) => s.id), rateByStudent, warningLine)
-  return { schools, total: { ...total, classes: classes.length } }
+  return { schools, total: { ...total, classes: classes.length }, weekly: weeklyRates(records) }
 }
 
 const pct = (r) => (r === null ? '—' : `${Math.round(r * 100)}%`)
@@ -234,6 +235,40 @@ export default function Network() {
               <span className="stat-label">Below {warningPct}%</span>
               <span className="subtext">{stats.total.belowExam} of them below the {examPct}% exam line</span>
             </div>
+          </div>
+
+          <div className="card-grid">
+            <section className="card">
+              <h2>Attendance by school</h2>
+              <RankBars
+                title="Attendance by school"
+                rows={stats.schools.map((s) => ({ key: s.id, label: schoolName(s.id), value: s.rate }))}
+                refs={[
+                  { value: warningLine, label: `${warningPct}% warning`, tone: 'warn' },
+                  { value: EXAM_ATTENDANCE_REQUIRED, label: `${examPct}% exam line`, tone: 'exam' },
+                ]}
+              />
+            </section>
+            <section className="card">
+              <h2>Network trend</h2>
+              {stats.weekly.length === 0 ? (
+                <p className="subtext">No attendance recorded in this range.</p>
+              ) : (
+                <TrendChart
+                  title="Weekly attendance across the network"
+                  points={stats.weekly.map((w) => ({
+                    key: w.weekStart,
+                    label: formatDay(w.weekStart).replace(/ \d{4}$/, ''),
+                    rate: w.rate,
+                    detail: `${w.attended} of ${w.total} marks attended`,
+                  }))}
+                  refs={[
+                    { value: warningLine, label: `${warningPct}% warning`, tone: 'warn' },
+                    { value: EXAM_ATTENDANCE_REQUIRED, label: `${examPct}% exam line`, tone: 'exam' },
+                  ]}
+                />
+              )}
+            </section>
           </div>
 
           <section className="card">

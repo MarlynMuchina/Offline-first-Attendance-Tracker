@@ -1,4 +1,4 @@
-import { greetingFor, formatDay, initials, weeklyRates } from './display.js'
+import { greetingFor, formatDay, initials, weeklyRates, weekdayRates, statusSplit } from './display.js'
 
 describe('greetingFor', () => {
   it('follows the time of day', () => {
@@ -55,5 +55,37 @@ describe('weeklyRates', () => {
   it('skips records without a date and handles no records', () => {
     expect(weeklyRates([{ status: 'PRESENT' }])).toEqual([])
     expect(weeklyRates([])).toEqual([])
+  })
+})
+
+describe('weekdayRates', () => {
+  it('groups records by school day, Monday first', () => {
+    const rows = weekdayRates([
+      { date: '2026-11-09', status: 'PRESENT' }, // Monday
+      { date: '2026-11-09', status: 'ABSENT' },
+      { date: '2026-11-13', status: 'LATE' }, // Friday
+      { date: '2026-11-14', status: 'ABSENT' }, // Saturday, left out
+    ])
+    expect(rows.map((r) => r.day)).toEqual(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])
+    expect(rows[0]).toMatchObject({ total: 2, attended: 1, rate: 0.5 })
+    expect(rows[4]).toMatchObject({ total: 1, attended: 1, rate: 1 })
+    expect(rows[1].rate).toBeNull()
+  })
+})
+
+describe('statusSplit', () => {
+  it('counts each status and its share', () => {
+    const split = statusSplit([
+      { status: 'PRESENT' }, { status: 'PRESENT' }, { status: 'LATE' }, { status: 'ABSENT' },
+    ])
+    expect(split).toEqual([
+      { status: 'PRESENT', count: 2, share: 0.5 },
+      { status: 'LATE', count: 1, share: 0.25 },
+      { status: 'ABSENT', count: 1, share: 0.25 },
+    ])
+  })
+
+  it('handles no records', () => {
+    expect(statusSplit([]).every((s) => s.share === 0)).toBe(true)
   })
 })

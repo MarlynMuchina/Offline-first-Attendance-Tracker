@@ -12,7 +12,8 @@ import { fetchClassAttendance } from '../lib/classAttendance'
 import { getChronicThreshold, getTermStart, getExamDate, defaultDateRange } from '../lib/settings'
 import { countSchoolDaysBetween, projectEligibility, EXAM_ATTENDANCE_REQUIRED } from '../lib/examEligibility'
 import { schoolName, refreshSchools } from '../lib/schools'
-import { greetingFor, formatDay, weeklyRates } from '../lib/display'
+import { greetingFor, formatDay, weeklyRates, weekdayRates, statusSplit } from '../lib/display'
+import { TrendChart, ColumnChart, SplitBar } from '../components/Charts'
 import { summarizeReasons } from '../lib/reasons'
 import AppShell, { ADMIN_NAV, Ring, LoadingScreen } from '../components/AppShell'
 
@@ -146,7 +147,7 @@ function computeStats(students, records, threshold) {
     .filter((p) => p.rate !== null && p.rate < threshold)
     .sort((a, b) => a.rate - b.rate)
 
-  return { perStudent, overallRate, chronic, weekly: weeklyRates(records), reasons: summarizeReasons(records) }
+  return { perStudent, overallRate, chronic, weekly: weeklyRates(records), weekdays: weekdayRates(records), split: statusSplit(records), reasons: summarizeReasons(records) }
 }
 
 // The most common reason teachers gave for absences and lates, if any.
@@ -698,7 +699,12 @@ useEffect(() => {
 
   const thresholdPct = Math.round(getChronicThreshold() * 100)
   const className = classes.find((c) => c.id === classId)?.name || 'This class'
-  const recentWeeks = stats.weekly.slice(-8)
+  const examPct = (EXAM_ATTENDANCE_REQUIRED * 100).toFixed(1)
+  const chartRefs = [
+    { value: getChronicThreshold(), label: `${thresholdPct}% warning`, tone: 'warn' },
+    { value: EXAM_ATTENDANCE_REQUIRED, label: `${examPct}% exam line`, tone: 'exam' },
+  ]
+  const shortDay = (iso) => formatDay(iso).replace(/ \d{4}$/, '')
   const showResultsFullWidth = riskRows.length > 0 || eligibility !== null
 
   return (
@@ -784,26 +790,22 @@ useEffect(() => {
       <div className="card-grid">
         <section className="card">
           <h2>Attendance trend</h2>
-          {recentWeeks.length === 0 ? (
+          {stats.weekly.length === 0 ? (
             <p className="subtext">No attendance recorded in this range.</p>
           ) : (
-            <div className="week-bars">
-              {recentWeeks.map((w) => (
-                <div key={w.weekStart} className="week-bar">
-                  <span className="subtext" style={{ margin: 0 }}>w/c {formatDay(w.weekStart).replace(/ \d{4}$/, '')}</span>
-                  <div className="week-bar-track">
-                    <div
-                      className={`week-bar-fill${w.rate < getChronicThreshold() ? ' is-low' : ''}`}
-                      style={{ width: `${Math.round(w.rate * 100)}%` }}
-                    />
-                  </div>
-                  <strong style={{ textAlign: 'right' }}>{Math.round(w.rate * 100)}%</strong>
-                </div>
-              ))}
-            </div>
+            <TrendChart
+              title="Weekly attendance"
+              points={stats.weekly.map((w) => ({
+                key: w.weekStart,
+                label: shortDay(w.weekStart),
+                rate: w.rate,
+                detail: `Week of ${formatDay(w.weekStart)} · ${w.attended} of ${w.total} marks attended`,
+              }))}
+              refs={chartRefs}
+            />
           )}
-          <p className="subtext" style={{ margin: '14px 0 0' }}>
-            Weekly attendance{stats.weekly.length > recentWeeks.length ? ', last 8 weeks of the range' : ''}. Amber weeks are below {thresholdPct}%.
+          <p className="subtext" style={{ margin: '10px 0 0' }}>
+            Weekly attendance (present or late) for each week of the range. Hover a week for its numbers.
           </p>
         </section>
 
@@ -859,6 +861,44 @@ useEffect(() => {
           )}
         </section>
       </div>
+
+      {stats.split.some((x) => x.count > 0) && (
+        <div className="card-grid">
+          <section className="card">
+            <h2>Attendance by day of the week</h2>
+            <ColumnChart
+              title="Attendance by day of the week"
+              rows={stats.weekdays.map((d) => ({
+                key: d.day,
+                label: d.day.slice(0, 3),
+                value: d.rate,
+                detail: `${d.day}s · ${d.attended} of ${d.total} marks attended`,
+              }))}
+              refs={chartRefs}
+            />
+            <p className="subtext" style={{ margin: '10px 0 0' }}>
+              Shows whether some days are weaker than others, for example Mondays or Fridays. The lowest day is labelled.
+            </p>
+          </section>
+
+          <section className="card">
+            <h2>Present, late and absent</h2>
+            <SplitBar
+              title="Present, late and absent"
+              segments={stats.split.map((x) => ({
+                key: x.status,
+                label: x.status === 'PRESENT' ? 'Present' : x.status === 'LATE' ? 'Late' : 'Absent',
+                count: x.count,
+                share: x.share,
+                tone: x.status.toLowerCase(),
+              }))}
+            />
+            <p className="subtext" style={{ margin: '14px 0 0' }}>
+              Every mark in the range. Late counts as attended in the attendance rate.
+            </p>
+          </section>
+        </div>
+      )}
 
       <section className="card">
         <div className="card-head">
