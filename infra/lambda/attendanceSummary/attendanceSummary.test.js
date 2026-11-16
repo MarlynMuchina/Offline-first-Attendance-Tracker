@@ -361,3 +361,53 @@ describe('school checks', () => {
     expect(mockCognitoSend).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('whole-school summary (class_id ALL)', () => {
+  const SCHOOL_INPUT = { ...VALID_INPUT, class_id: 'ALL' };
+  const SCHOOL_STUDENTS = STUDENTS.map((s, i) => ({ ...s, class_id: i === 2 ? 'SCH01-FORM3MARS' : 'SCH01-FORM2NORTH' }));
+
+  test('reads the whole school through the bySchool indexes, with the dates as a filter', async () => {
+    mockDocSend
+      .mockResolvedValueOnce({ Items: SCHOOL_STUDENTS })
+      .mockResolvedValueOnce({ Items: RECORDS });
+    mockBedrockSend.mockResolvedValue(bedrockResponseFor('school summary'));
+
+    const result = await handler({ arguments: { input: SCHOOL_INPUT }, identity: SCH01_CALLER });
+
+    const [studentQuery] = mockDocSend.mock.calls[0];
+    const [recordQuery] = mockDocSend.mock.calls[1];
+    expect(studentQuery.IndexName).toBe('bySchool');
+    expect(studentQuery.ExpressionAttributeValues[':sid']).toBe('SCH01');
+    expect(recordQuery.IndexName).toBe('bySchool');
+    expect(recordQuery.KeyConditionExpression).toBe('school_id = :sid');
+    expect(recordQuery.FilterExpression).toBe('#d BETWEEN :start AND :end');
+    expect(result.summary).toBe('school summary');
+
+    const prompt = JSON.parse(mockBedrockSend.mock.calls[0][0].body).messages[0].content;
+    expect(prompt).toContain('the whole school');
+    expect(prompt).toContain('"class": "SCH01-FORM3MARS"');
+  });
+
+  test('follows every page of a large school', async () => {
+    mockDocSend
+      .mockResolvedValueOnce({ Items: SCHOOL_STUDENTS })
+      .mockResolvedValueOnce({ Items: RECORDS.slice(0, 5), LastEvaluatedKey: { id: 'page-2' } })
+      .mockResolvedValueOnce({ Items: RECORDS.slice(5) });
+    mockBedrockSend.mockResolvedValue(bedrockResponseFor('school summary'));
+
+    await handler({ arguments: { input: SCHOOL_INPUT }, identity: SCH01_CALLER });
+
+    expect(mockDocSend).toHaveBeenCalledTimes(3);
+    expect(mockDocSend.mock.calls[2][0].ExclusiveStartKey).toEqual({ id: 'page-2' });
+    const prompt = JSON.parse(mockBedrockSend.mock.calls[0][0].body).messages[0].content;
+    expect(prompt).toContain('"attendance_rate": 80');
+  });
+
+  test("another school's admin is refused", async () => {
+    await expect(handler({
+      arguments: { input: { ...SCHOOL_INPUT, school_id: 'SCH02' } },
+      identity: SCH01_CALLER,
+    })).rejects.toThrow("own school's data");
+    expect(mockDocSend).not.toHaveBeenCalled();
+  });
+});
