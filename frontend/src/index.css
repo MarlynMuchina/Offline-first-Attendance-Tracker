@@ -1012,6 +1012,149 @@ td {
   .school-map { height: 320px; }
 }
 
+/* ---------- Student profile (components/StudentProfile.jsx) ---------- */
+
+.link-button {
+  font: inherit;
+  font-weight: 600;
+  color: var(--green-ink);
+  background: none;
+  border: none;
+  border-radius: 4px;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--field-line);
+  text-underline-offset: 3px;
+}
+
+.link-button:hover:not(:disabled) {
+  background: none;
+  text-decoration-color: currentColor;
+}
+
+.student-search {
+  max-width: 220px;
+}
+
+.student-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.student-chip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--field);
+  color: var(--ink);
+  padding: 10px 14px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.student-chip:hover:not(:disabled) {
+  background: var(--green-soft);
+  border-color: var(--green-ink);
+}
+
+.text-warn { color: var(--amber-text); }
+.text-exam { color: var(--red-text); }
+
+.profile-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 20, 30, 0.45);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 16px;
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.profile {
+  width: 100%;
+  max-width: 640px;
+}
+
+.profile-top {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin: 8px 0 20px;
+  flex-wrap: wrap;
+}
+
+.profile-facts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--body);
+}
+
+.cal {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.cal-row {
+  display: grid;
+  grid-template-columns: 70px repeat(5, 1fr);
+  gap: 4px;
+  align-items: center;
+}
+
+.cal-head span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+}
+
+.cal-head span:first-child { text-align: left; }
+
+.cal-day {
+  height: 26px;
+  border-radius: 6px;
+  background: var(--sand);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
+.cal-present { background: var(--chart-present); }
+.cal-late { background: var(--chart-late); color: #1F2A33; }
+.cal-absent { background: var(--chart-absent); }
+
+.profile-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-list li {
+  display: grid;
+  grid-template-columns: 120px 70px 1fr;
+  gap: 10px;
+  font-size: 14px;
+}
+
 /* ---------- Register (teacher) ---------- */
 
 .reason-pick {
