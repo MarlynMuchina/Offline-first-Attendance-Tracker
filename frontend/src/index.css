@@ -1242,6 +1242,29 @@ td {
   gap: 16px;
 }
 
+.home-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-theme {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.home-theme:hover:not(:disabled) {
+  background: var(--green-soft);
+}
+
 .home-brand {
   display: flex;
   align-items: center;

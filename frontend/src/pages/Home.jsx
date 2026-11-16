@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BrandMark, Icon } from '../components/AppShell'
+import { getTheme, setTheme } from '../lib/theme'
 
 const features = [
   { icon: 'offline', title: 'Works offline', desc: 'Mark the register with no signal. It syncs later.', tone: 'blue' },
@@ -17,6 +19,13 @@ const accountSteps = [
 
 export default function Home() {
   const navigate = useNavigate()
+  const [theme, setThemeState] = useState(getTheme)
+
+  function toggleTheme() {
+    const next = theme === 'dark' ? 'light' : 'dark'
+    setTheme(next)
+    setThemeState(next)
+  }
 
   return (
     <div className="home">
@@ -28,9 +37,19 @@ export default function Home() {
             <span>Angaza Center</span>
           </div>
         </div>
-        <button onClick={() => navigate('/login')} className="btn btn-primary">
-          Sign In
-        </button>
+        <div className="home-nav-actions">
+          <button
+            onClick={toggleTheme}
+            className="home-theme"
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          >
+            <Icon name={theme === 'dark' ? 'sun' : 'moon'} />
+          </button>
+          <button onClick={() => navigate('/login')} className="btn btn-primary">
+            Sign In
+          </button>
+        </div>
       </header>
 
       <section className="home-hero">
@@ -44,6 +63,7 @@ export default function Home() {
         </div>
         <div className="home-hero-photo">
           <img src="/home-students.webp" alt="Two students working together on a laptop in class" width="900" height="1012" />
+          {/* A sample of the teacher's register, to show what the app does. */}
           <div className="home-roll" aria-hidden="true">
             <span className="home-roll-label">Form 2 North · Today</span>
             <strong>34 of 36 present</strong>
