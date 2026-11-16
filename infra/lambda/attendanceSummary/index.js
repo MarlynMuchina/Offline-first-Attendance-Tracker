@@ -46,37 +46,69 @@ async function assertCallerSchool(identity, schoolId) {
   }
 }
 
+// Every page of a DynamoDB query (a whole school can pass the 1 MB page size).
+async function queryAll(params) {
+  const items = [];
+  let ExclusiveStartKey;
+  do {
+    const page = await doc.send(new QueryCommand({ ...params, ExclusiveStartKey }));
+    items.push(...(page.Items || []));
+    ExclusiveStartKey = page.LastEvaluatedKey;
+  } while (ExclusiveStartKey);
+  return { Items: items };
+}
+
 exports.handler = async (event) => {
   const { school_id, class_id, start_date, end_date } = event.arguments.input;
   await assertCallerSchool(event.identity, school_id);
 
-  // 1. Pull the class roster (for names, not raw PII beyond what's needed)
-  const students = await doc.send(new QueryCommand({
-    TableName: STUDENT_TABLE,
-    IndexName: 'byClass',
-    KeyConditionExpression: 'class_id = :cid',
-    ExpressionAttributeValues: { ':cid': class_id },
-  }));
+  // class_id "ALL" is the admin dashboard's whole-school view: every
+  // student and record of the caller's school instead of one class.
+  const wholeSchool = class_id === 'ALL';
+
+  // 1. Pull the roster (for names, not raw PII beyond what's needed)
+  const students = await queryAll(wholeSchool
+    ? {
+      TableName: STUDENT_TABLE,
+      IndexName: 'bySchool',
+      KeyConditionExpression: 'school_id = :sid',
+      ExpressionAttributeValues: { ':sid': school_id },
+    }
+    : {
+      TableName: STUDENT_TABLE,
+      IndexName: 'byClass',
+      KeyConditionExpression: 'class_id = :cid',
+      ExpressionAttributeValues: { ':cid': class_id },
+    });
 
   // 2. Pull attendance records for the date range
-  const records = await doc.send(new QueryCommand({
-    TableName: ATTENDANCE_TABLE,
-    IndexName: 'byClassDate',
-    KeyConditionExpression: 'class_id = :cid AND #d BETWEEN :start AND :end',
-    ExpressionAttributeNames: { '#d': 'date' },
-    ExpressionAttributeValues: { ':cid': class_id, ':start': start_date, ':end': end_date },
-  }));
+  const records = await queryAll(wholeSchool
+    ? {
+      TableName: ATTENDANCE_TABLE,
+      IndexName: 'bySchool',
+      KeyConditionExpression: 'school_id = :sid',
+      FilterExpression: '#d BETWEEN :start AND :end',
+      ExpressionAttributeNames: { '#d': 'date' },
+      ExpressionAttributeValues: { ':sid': school_id, ':start': start_date, ':end': end_date },
+    }
+    : {
+      TableName: ATTENDANCE_TABLE,
+      IndexName: 'byClassDate',
+      KeyConditionExpression: 'class_id = :cid AND #d BETWEEN :start AND :end',
+      ExpressionAttributeNames: { '#d': 'date' },
+      ExpressionAttributeValues: { ':cid': class_id, ':start': start_date, ':end': end_date },
+    });
 
   // 3. Aggregate -- curated stats only, not raw daily rows, per CSG platform
   // standard ("no heavy reporting workloads query raw data directly", and
   // "prompts must avoid exposing sensitive data unnecessarily").
   const statsByStudent = {};
   // Only this school's students, so another school's class id gives nothing away.
-  for (const s of students.Items || []) {
+  for (const s of students.Items) {
     if (s.school_id !== school_id) continue;
-    statsByStudent[s.id] = { name: `${s.first_name} ${s.last_name}`, present: 0, absent: 0, late: 0, total: 0 };
+    statsByStudent[s.id] = { name: `${s.first_name} ${s.last_name}`, class_id: s.class_id, present: 0, absent: 0, late: 0, total: 0 };
   }
-  for (const r of records.Items || []) {
+  for (const r of records.Items) {
     const stat = statsByStudent[r.student_id];
     if (!stat) continue;
     stat.total += 1;
@@ -87,6 +119,7 @@ exports.handler = async (event) => {
 
   const summaryRows = Object.values(statsByStudent).map((s) => ({
     name: s.name,
+    ...(wholeSchool ? { class: s.class_id } : {}),
     // Late counts as attended, the same as on the dashboard, in the SMS alerts
     // and in the risk model.
     attendance_rate: s.total > 0 ? Math.round(((s.present + s.late) / s.total) * 100) : null,
@@ -101,7 +134,7 @@ exports.handler = async (event) => {
     WEATHER: 'Weather', CHORES: 'Morning chores', OTHER: 'Other',
   };
   const reasonTotals = { absences: {}, late_arrivals: {} };
-  for (const r of records.Items || []) {
+  for (const r of records.Items) {
     if (!statsByStudent[r.student_id]) continue;
     const group = r.status === 'ABSENT' ? reasonTotals.absences : r.status === 'LATE' ? reasonTotals.late_arrivals : null;
     if (!group) continue;
@@ -118,12 +151,14 @@ Use only the provided dataset summary below.
 Do not infer sensitive personal facts not supported by the data.
 Audience: school leader
 
+Scope: ${wholeSchool ? 'the whole school (every class; each row names its class id). Compare the classes as well as the students.' : 'one class'}
+
 Dataset (${start_date} to ${end_date}):
 ${JSON.stringify(summaryRows, null, 2)}
 
 Students below 70% attendance: ${belowThreshold.length > 0 ? JSON.stringify(belowThreshold) : 'none'}
 
-Reasons teachers gave (class totals; giving a reason is optional): ${JSON.stringify(reasonTotals)}
+Reasons teachers gave (${wholeSchool ? 'school' : 'class'} totals; giving a reason is optional): ${JSON.stringify(reasonTotals)}
 
 Output format:
 1. Summary

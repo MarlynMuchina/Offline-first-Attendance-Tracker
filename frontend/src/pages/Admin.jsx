@@ -13,10 +13,11 @@ import { getChronicThreshold, getTermStart, getExamDate, defaultDateRange } from
 import { countSchoolDaysBetween, projectEligibility, EXAM_ATTENDANCE_REQUIRED } from '../lib/examEligibility'
 import { schoolName, refreshSchools } from '../lib/schools'
 import { greetingFor, formatDay, weeklyRates, weekdayRates, statusSplit } from '../lib/display'
-import { TrendChart, ColumnChart, SplitBar } from '../components/Charts'
+import { TrendChart, ColumnChart, SplitBar, RankBars } from '../components/Charts'
 import StudentProfile from '../components/StudentProfile'
 import { toCsv } from '../lib/studentProfile'
 import { summarizeReasons } from '../lib/reasons'
+import { ALL_CLASSES, classBreakdown, mapLimited } from '../lib/schoolOverview'
 import AppShell, { ADMIN_NAV, Ring, LoadingScreen } from '../components/AppShell'
 
 const client = generateClient()
@@ -30,6 +31,7 @@ const listStudentsQuery = /* GraphQL */ `
         id
         first_name
         last_name
+        class_id
         guardian_phone
         sms_preference
       }
@@ -291,10 +293,14 @@ const loadData = useCallback(async () => {
   setLoading(true)
   setError('')
   try {
-    const [students, records] = await cloudCall(Promise.all([
-      fetchAllPages(listStudentsQuery, { classId }, 'listStudents'),
-      fetchClassAttendance((request) => client.graphql(request), { classId, startDate, endDate }),
-    ]), 20000)
+    // The whole-school view loads every class, a few at a time.
+    const classIds = classId === ALL_CLASSES ? classes.map((c) => c.id) : [classId]
+    const perClass = await cloudCall(mapLimited(classIds, 3, (id) => Promise.all([
+      fetchAllPages(listStudentsQuery, { classId: id }, 'listStudents'),
+      fetchClassAttendance((request) => client.graphql(request), { classId: id, startDate, endDate }),
+    ])), classIds.length > 1 ? 40000 : 20000)
+    const students = perClass.flatMap(([list], i) => list.map((s) => ({ ...s, class_id: s.class_id || classIds[i] })))
+    const records = perClass.flatMap(([, list]) => list)
     setStats(computeStats(students, records, getChronicThreshold()))
     setSavedCopy(null)
     db.dashboardCache
@@ -315,7 +321,7 @@ const loadData = useCallback(async () => {
   } finally {
     setLoading(false)
   }
-}, [classId, startDate, endDate])  // ← add classId to deps
+}, [classId, classes, startDate, endDate])
 
 const [, setSchoolListVersion] = useState(0)
 
@@ -330,7 +336,7 @@ useEffect(() => {
       const schoolClasses = await cloudCall(getClassesForSchool(sid), 10000)
       setSchoolId(sid)
       setClasses(schoolClasses)
-      setClassId(schoolClasses[0].id)
+      setClassId(schoolClasses.length > 1 ? ALL_CLASSES : schoolClasses[0].id)
       db.dashboardCache
         .put({ key: 'context', schoolId: sid, classes: schoolClasses })
         .catch((err) => console.warn('Could not save class list on this device:', err))
@@ -343,7 +349,7 @@ useEffect(() => {
       if (saved?.classes?.length) {
         setSchoolId(saved.schoolId)
         setClasses(saved.classes)
-        setClassId(saved.classes[0].id)
+        setClassId(saved.classes.length > 1 ? ALL_CLASSES : saved.classes[0].id)
         return
       }
       setContextError(err.message)
@@ -513,11 +519,12 @@ useEffect(() => {
     setEligibilityError('')
     try {
       const today = new Date().toISOString().split('T')[0]
-      const records = await fetchClassAttendance((request) => client.graphql(request), {
-        classId,
+      const classIds = classId === ALL_CLASSES ? classes.map((c) => c.id) : [classId]
+      const records = (await mapLimited(classIds, 3, (id) => fetchClassAttendance((request) => client.graphql(request), {
+        classId: id,
         startDate: termStart,
         endDate: today < examDate ? today : examDate,
-      })
+      }))).flat()
       const counts = {}
       for (const r of records) {
         const c = counts[r.student_id] || (counts[r.student_id] = { recorded: 0, attended: 0 })
@@ -546,6 +553,12 @@ useEffect(() => {
 
 
 
+  const classNameOf = (id) => (id === ALL_CLASSES ? 'Whole school' : classes.find((c) => c.id === id)?.name || id || 'class')
+  // Whole-school view only: one row per class.
+  const byClass = stats && classId === ALL_CLASSES
+    ? classBreakdown(stats.perStudent, classes, getChronicThreshold(), EXAM_ATTENDANCE_REQUIRED)
+    : null
+
   // Scored students, highest risk first.
   const riskRows = stats
     ? stats.perStudent
@@ -561,10 +574,13 @@ useEffect(() => {
   // The class list for the dashboard's dates as a spreadsheet file.
   function handleExportCSV() {
     if (!stats) return
-    const header = ['Student', 'Marked days', 'Present', 'Late', 'Absent', 'Attendance rate (%)', 'Below warning line', 'Predicted risk']
+    const wholeSchool = classId === ALL_CLASSES
+    const header = [...(wholeSchool ? ['Class'] : []), 'Student', 'Marked days', 'Present', 'Late', 'Absent', 'Attendance rate (%)', 'Below warning line', 'Predicted risk']
     const rows = [...stats.perStudent]
-      .sort((a, b) => `${a.student.last_name} ${a.student.first_name}`.localeCompare(`${b.student.last_name} ${b.student.first_name}`))
+      .sort((a, b) => (wholeSchool ? classNameOf(a.student.class_id).localeCompare(classNameOf(b.student.class_id)) : 0) ||
+        `${a.student.last_name} ${a.student.first_name}`.localeCompare(`${b.student.last_name} ${b.student.first_name}`))
       .map((p) => [
+        ...(wholeSchool ? [classNameOf(p.student.class_id)] : []),
         `${p.student.first_name} ${p.student.last_name}`,
         p.total,
         p.attended - p.late,
@@ -577,7 +593,7 @@ useEffect(() => {
     const blob = new Blob([toCsv(header, rows)], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
-    const safeClass = (classes.find((c) => c.id === classId)?.name || 'class').replace(/[^A-Za-z0-9]+/g, '-')
+    const safeClass = (wholeSchool ? 'whole-school' : classNameOf(classId)).replace(/[^A-Za-z0-9]+/g, '-')
     link.href = url
     link.download = `attendance-${safeClass}-${shownRange.startDate}-to-${shownRange.endDate}.csv`
     document.body.appendChild(link)
@@ -598,7 +614,7 @@ useEffect(() => {
 
     doc.setFontSize(10)
     doc.setTextColor(120)
-    doc.text(`Class: ${classes.find((c) => c.id === classId)?.name || classId}`, 14, y)
+    doc.text(`Class: ${classId === ALL_CLASSES ? `Whole school (${classes.length} classes)` : classNameOf(classId)}`, 14, y)
     doc.text(`Date range: ${startDate} to ${endDate}`, 14, y + 5)
     doc.text(`Generated: ${new Date().toLocaleString()}`, 14, y + 10)
     y += 21
@@ -615,6 +631,19 @@ useEffect(() => {
     )
     y += 14
 
+    if (byClass) {
+      doc.setFontSize(13)
+      doc.text('Classes Compared', 14, y)
+      y += 8
+      doc.setFontSize(10)
+      for (const c of byClass) {
+        const rate = c.rate === null ? 'no records' : `${Math.round(c.rate * 100)}%`
+        doc.text(`${c.name} — ${rate}, ${c.belowWarning} of ${c.students} below ${Math.round(getChronicThreshold() * 100)}%, ${c.belowExam} below the exam line`, 14, y)
+        y += 6
+      }
+      y += 8
+    }
+
     doc.setFontSize(13)
     doc.text(`Students Below ${Math.round(getChronicThreshold() * 100)}% Attendance (${stats.chronic.length})`, 14, y)
     y += 8
@@ -626,7 +655,7 @@ useEffect(() => {
     } else {
       for (const c of stats.chronic) {
         doc.text(
-          `${c.student.first_name} ${c.student.last_name} — ${Math.round(c.rate * 100)}% (${c.absent} absences)`,
+          `${c.student.first_name} ${c.student.last_name}${byClass ? ` (${classNameOf(c.student.class_id)})` : ''} — ${Math.round(c.rate * 100)}% (${c.absent} absences)`,
           14,
           y
         )
@@ -693,7 +722,7 @@ useEffect(() => {
       }
     }
 
-    doc.save(`attendance-report-${startDate}-to-${endDate}.pdf`)
+    doc.save(`attendance-report-${classId === ALL_CLASSES ? 'whole-school-' : ''}${startDate}-to-${endDate}.pdf`)
   }
 
   const signOutButton = (
@@ -734,7 +763,8 @@ useEffect(() => {
   }
 
   const thresholdPct = Math.round(getChronicThreshold() * 100)
-  const className = classes.find((c) => c.id === classId)?.name || 'This class'
+  const wholeSchool = classId === ALL_CLASSES
+  const className = wholeSchool ? 'The whole school' : classes.find((c) => c.id === classId)?.name || 'This class'
   const examPct = (EXAM_ATTENDANCE_REQUIRED * 100).toFixed(1)
   const chartRefs = [
     { value: getChronicThreshold(), label: `${thresholdPct}% warning`, tone: 'warn' },
@@ -769,7 +799,7 @@ useEffect(() => {
             <h1>{greetingFor()}, Admin</h1>
             <p>
               {stats.overallRate !== null
-                ? `${className} averages ${Math.round(stats.overallRate * 100)}% over the selected range. `
+                ? `${className}${wholeSchool ? ` (${classes.length} classes, ${stats.perStudent.length} students)` : ''} averages ${Math.round(stats.overallRate * 100)}% over the selected range. `
                 : `No attendance has been marked for ${className} in this range. `}
               {stats.chronic.length === 1
                 ? `1 student is below ${thresholdPct}%.`
@@ -779,6 +809,7 @@ useEffect(() => {
               <label className="filter">
                 Class
                 <select value={classId || ''} onChange={(e) => changeView({ nextClassId: e.target.value })}>
+                  {classes.length > 1 && <option value={ALL_CLASSES}>Whole school (all classes)</option>}
                   {classes.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
@@ -850,7 +881,7 @@ useEffect(() => {
           <h2>AI summary <span className="count">(Claude via Bedrock)</span></h2>
           {!summary && !summaryLoading && (
             <>
-              <p className="subtext">A short written summary of {className}'s attendance for the dates above.</p>
+              <p className="subtext">A short written summary of {wholeSchool ? "the whole school's" : `${className}'s`} attendance for the dates above.</p>
               <button onClick={handleGenerateSummary} className="btn btn-primary">Generate Summary</button>
             </>
           )}
@@ -898,6 +929,56 @@ useEffect(() => {
           )}
         </section>
       </div>
+
+      {byClass && (
+        <section className="card">
+          <h2>Classes compared <span className="count">({byClass.length})</span></h2>
+          <RankBars
+            title="Average attendance by class"
+            rows={byClass.map((c) => ({ key: c.id, label: c.name, value: c.rate }))}
+            refs={chartRefs}
+          />
+          <div className="table-scroll" style={{ marginTop: 14 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Class</th>
+                  <th style={{ textAlign: 'right' }}>Students</th>
+                  <th>Average</th>
+                  <th style={{ textAlign: 'right' }}>Below {thresholdPct}%</th>
+                  <th style={{ textAlign: 'right' }}>Below exam line</th>
+                  <th style={{ textAlign: 'right' }}>Absences</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {[...byClass].sort((a, b) => (a.rate ?? 2) - (b.rate ?? 2)).map((c) => (
+                  <tr key={c.id}>
+                    <td style={{ fontWeight: 600 }}>{c.name}</td>
+                    <td style={{ textAlign: 'right' }}>{c.students}</td>
+                    <td>
+                      {c.rate === null ? '—' : (
+                        <span className={`pill ${c.rate < EXAM_ATTENDANCE_REQUIRED ? 'pill-red' : c.rate < getChronicThreshold() ? 'pill-amber' : 'pill-green'}`}>
+                          {Math.round(c.rate * 100)}%
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>{c.belowWarning}</td>
+                    <td style={{ textAlign: 'right' }}>{c.belowExam}</td>
+                    <td style={{ textAlign: 'right' }}>{c.absences}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button onClick={() => changeView({ nextClassId: c.id })} className="btn-small">Open class</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="subtext" style={{ margin: '12px 0 0' }}>
+            Weakest class first. Every card below covers the whole school; pick a class above, or Open class, to see one class.
+          </p>
+        </section>
+      )}
 
       {stats.split.some((x) => x.count > 0) && (
         <div className="card-grid">
@@ -962,6 +1043,7 @@ useEffect(() => {
                     <button type="button" className="link-button" onClick={() => setProfileStudent(c.student)}>
                       {c.student.first_name} {c.student.last_name}
                     </button>
+                    {wholeSchool && <span className="subtext" style={{ display: 'block', fontWeight: 400, fontSize: 12, margin: 0 }}>{classNameOf(c.student.class_id)}</span>}
                   </td>
                   <td>
                     <span className={`pill ${c.rate < EXAM_ATTENDANCE_REQUIRED ? 'pill-red' : 'pill-amber'}`}>
@@ -1012,7 +1094,10 @@ useEffect(() => {
               <div className="student-grid">
                 {shown.map((p) => (
                   <button key={p.student.id} type="button" className="student-chip" onClick={() => setProfileStudent(p.student)}>
-                    <span>{p.student.first_name} {p.student.last_name}</span>
+                    <span>
+                      {p.student.first_name} {p.student.last_name}
+                      {wholeSchool && <small className="student-chip-class">{classNameOf(p.student.class_id)}</small>}
+                    </span>
                     <strong className={p.rate === null ? '' : p.rate < EXAM_ATTENDANCE_REQUIRED ? 'text-exam' : p.rate < getChronicThreshold() ? 'text-warn' : ''}>
                       {p.rate === null ? '—' : `${Math.round(p.rate * 100)}%`}
                     </strong>
@@ -1198,7 +1283,7 @@ useEffect(() => {
         <StudentProfile
           student={profileStudent}
           records={stats.records}
-          className={className}
+          className={classNameOf(profileStudent.class_id || classId)}
           risk={riskResults[profileStudent.id]}
           threshold={getChronicThreshold()}
           range={shownRange}
