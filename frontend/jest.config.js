@@ -1,6 +1,8 @@
 export default {
   testEnvironment: 'node',
   transform: {},
+  // The bulk-data load test is slow; run it with `npm run test:load`.
+  testPathIgnorePatterns: ['/node_modules/', 'bulkLoad'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },

@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:load": "node --experimental-vm-modules node_modules/jest/bin/jest.js --testPathIgnorePatterns=/node_modules/ --runTestsByPath src/lib/bulkLoad.test.js"
   },
   "dependencies": {
     "aws-amplify": "^6.20.0",
