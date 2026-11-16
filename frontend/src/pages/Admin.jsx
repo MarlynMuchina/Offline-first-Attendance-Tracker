@@ -14,6 +14,8 @@ import { countSchoolDaysBetween, projectEligibility, EXAM_ATTENDANCE_REQUIRED } 
 import { schoolName, refreshSchools } from '../lib/schools'
 import { greetingFor, formatDay, weeklyRates, weekdayRates, statusSplit } from '../lib/display'
 import { TrendChart, ColumnChart, SplitBar } from '../components/Charts'
+import StudentProfile from '../components/StudentProfile'
+import { toCsv } from '../lib/studentProfile'
 import { summarizeReasons } from '../lib/reasons'
 import AppShell, { ADMIN_NAV, Ring, LoadingScreen } from '../components/AppShell'
 
@@ -28,6 +30,8 @@ const listStudentsQuery = /* GraphQL */ `
         id
         first_name
         last_name
+        guardian_phone
+        sms_preference
       }
       nextToken
     }
@@ -119,7 +123,7 @@ async function fetchAllPages(query, baseVariables, resultKey) {
 function computeStats(students, records, threshold) {
   const byStudent = {}
   for (const s of students) {
-    byStudent[s.id] = { student: s, total: 0, attended: 0, absent: 0 }
+    byStudent[s.id] = { student: s, total: 0, attended: 0, absent: 0, late: 0 }
   }
   for (const r of records) {
     const bucket = byStudent[r.student_id]
@@ -129,6 +133,7 @@ function computeStats(students, records, threshold) {
       bucket.absent += 1
     } else {
       bucket.attended += 1
+      if (r.status === 'LATE') bucket.late += 1
     }
   }
 
@@ -147,7 +152,7 @@ function computeStats(students, records, threshold) {
     .filter((p) => p.rate !== null && p.rate < threshold)
     .sort((a, b) => a.rate - b.rate)
 
-  return { perStudent, overallRate, chronic, weekly: weeklyRates(records), weekdays: weekdayRates(records), split: statusSplit(records), reasons: summarizeReasons(records) }
+  return { records, perStudent, overallRate, chronic, weekly: weeklyRates(records), weekdays: weekdayRates(records), split: statusSplit(records), reasons: summarizeReasons(records) }
 }
 
 // The most common reason teachers gave for absences and lates, if any.
@@ -265,6 +270,9 @@ const [contextError, setContextError] = useState('')
     const [summaryError, setSummaryError] = useState('')
   const [summaryExpanded, setSummaryExpanded] = useState(false)
 
+  const [profileStudent, setProfileStudent] = useState(null)
+  const [studentSearch, setStudentSearch] = useState('')
+  const [studentsExpanded, setStudentsExpanded] = useState(false)
   const [riskResults, setRiskResults] = useState({}) // { studentId: { risk_level, risk_score, reason } }
   const [riskLoading, setRiskLoading] = useState(false)
   const [riskError, setRiskError] = useState('')
@@ -550,6 +558,34 @@ useEffect(() => {
     if (r.risk.risk_level in riskCounts) riskCounts[r.risk.risk_level] += 1
   }
 
+  // The class list for the dashboard's dates as a spreadsheet file.
+  function handleExportCSV() {
+    if (!stats) return
+    const header = ['Student', 'Marked days', 'Present', 'Late', 'Absent', 'Attendance rate (%)', 'Below warning line', 'Predicted risk']
+    const rows = [...stats.perStudent]
+      .sort((a, b) => `${a.student.last_name} ${a.student.first_name}`.localeCompare(`${b.student.last_name} ${b.student.first_name}`))
+      .map((p) => [
+        `${p.student.first_name} ${p.student.last_name}`,
+        p.total,
+        p.attended - p.late,
+        p.late,
+        p.absent,
+        p.rate === null ? '' : Math.round(p.rate * 1000) / 10,
+        p.rate !== null && p.rate < getChronicThreshold() ? 'Yes' : 'No',
+        riskResults[p.student.id]?.risk_level || '',
+      ])
+    const blob = new Blob([toCsv(header, rows)], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const safeClass = (classes.find((c) => c.id === classId)?.name || 'class').replace(/[^A-Za-z0-9]+/g, '-')
+    link.href = url
+    link.download = `attendance-${safeClass}-${shownRange.startDate}-to-${shownRange.endDate}.csv`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
   function handleExportPDF() {
     if (!stats) return
 
@@ -770,6 +806,7 @@ useEffect(() => {
             <p className="subtext" style={{ margin: 0 }}>Showing data from {startDate} to {endDate}</p>
             <div className="button-group">
               <button onClick={handleExportPDF} className="btn">Export PDF</button>
+              <button onClick={handleExportCSV} className="btn">Export CSV</button>
             </div>
           </div>
         </section>
@@ -921,7 +958,11 @@ useEffect(() => {
             <tbody>
               {(chronicExpanded ? stats.chronic : stats.chronic.slice(0, RISK_PREVIEW_ROWS)).map((c) => (
                 <tr key={c.student.id}>
-                  <td style={{ fontWeight: 600 }}>{c.student.first_name} {c.student.last_name}</td>
+                  <td style={{ fontWeight: 600 }}>
+                    <button type="button" className="link-button" onClick={() => setProfileStudent(c.student)}>
+                      {c.student.first_name} {c.student.last_name}
+                    </button>
+                  </td>
                   <td>
                     <span className={`pill ${c.rate < EXAM_ATTENDANCE_REQUIRED ? 'pill-red' : 'pill-amber'}`}>
                       {Math.round(c.rate * 100)}%
@@ -945,6 +986,48 @@ useEffect(() => {
             Red is below the {(EXAM_ATTENDANCE_REQUIRED * 100).toFixed(1)}% exam line; amber is between that and {thresholdPct}%.
           </p>
         )}
+      </section>
+
+      <section className="card" id="students">
+        <div className="card-head">
+          <h2>Students <span className="count">({stats.perStudent.length})</span></h2>
+          <input
+            type="search"
+            value={studentSearch}
+            onChange={(e) => setStudentSearch(e.target.value)}
+            placeholder="Find a student"
+            aria-label="Find a student"
+            className="student-search"
+          />
+        </div>
+        <p className="subtext">Select a name to see that student's calendar, reasons and risk.</p>
+        {(() => {
+          const query = studentSearch.trim().toLowerCase()
+          const list = [...stats.perStudent]
+            .filter((p) => !query || `${p.student.first_name} ${p.student.last_name}`.toLowerCase().includes(query))
+            .sort((a, b) => a.student.first_name.localeCompare(b.student.first_name))
+          const shown = studentsExpanded || query ? list : list.slice(0, 8)
+          return (
+            <>
+              <div className="student-grid">
+                {shown.map((p) => (
+                  <button key={p.student.id} type="button" className="student-chip" onClick={() => setProfileStudent(p.student)}>
+                    <span>{p.student.first_name} {p.student.last_name}</span>
+                    <strong className={p.rate === null ? '' : p.rate < EXAM_ATTENDANCE_REQUIRED ? 'text-exam' : p.rate < getChronicThreshold() ? 'text-warn' : ''}>
+                      {p.rate === null ? '—' : `${Math.round(p.rate * 100)}%`}
+                    </strong>
+                  </button>
+                ))}
+                {shown.length === 0 && <p className="subtext" style={{ margin: 0 }}>No student matches.</p>}
+              </div>
+              {!query && list.length > 8 && (
+                <button onClick={() => setStudentsExpanded((v) => !v)} className="btn-small" style={{ marginTop: 12 }}>
+                  {studentsExpanded ? 'Show less' : `Show all ${list.length} students`}
+                </button>
+              )}
+            </>
+          )
+        })()}
       </section>
 
       <section className="card">
@@ -1022,7 +1105,11 @@ useEffect(() => {
                     const risk = p.risk
                     return (
                       <tr key={p.student.id}>
-                        <td style={{ fontWeight: 600 }}>{p.student.first_name} {p.student.last_name}</td>
+                        <td style={{ fontWeight: 600 }}>
+                          <button type="button" className="link-button" onClick={() => setProfileStudent(p.student)}>
+                            {p.student.first_name} {p.student.last_name}
+                          </button>
+                        </td>
                         <td>{p.rate !== null ? `${Math.round(p.rate * 100)}%` : '—'}</td>
                         <td>
                           <span className={`pill ${RISK_TONES[risk.risk_level] || 'pill-gray'}`}>
@@ -1082,7 +1169,11 @@ useEffect(() => {
                       const label = ELIGIBILITY_LABELS[r.status]
                       return (
                         <tr key={r.student.id}>
-                          <td style={{ fontWeight: 600 }}>{r.student.first_name} {r.student.last_name}</td>
+                          <td style={{ fontWeight: 600 }}>
+                            <button type="button" className="link-button" onClick={() => setProfileStudent(r.student)}>
+                              {r.student.first_name} {r.student.last_name}
+                            </button>
+                          </td>
                           <td>{r.recorded > 0 ? `${r.attended}/${r.recorded} (${Math.round((r.attended / r.recorded) * 100)}%)` : '—'}</td>
                           <td>
                             <span className={`pill ${label.tone}`}>{label.text}</span>
@@ -1103,6 +1194,17 @@ useEffect(() => {
           )}
         </section>
       </div>
+      {profileStudent && stats && (
+        <StudentProfile
+          student={profileStudent}
+          records={stats.records}
+          className={className}
+          risk={riskResults[profileStudent.id]}
+          threshold={getChronicThreshold()}
+          range={shownRange}
+          onClose={() => setProfileStudent(null)}
+        />
+      )}
     </AppShell>
   )
 }
