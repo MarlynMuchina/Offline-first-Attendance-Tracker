@@ -1,42 +1,18 @@
 import { useNavigate } from 'react-router-dom'
-import { BrandMark, Ring } from '../components/AppShell'
+import { BrandMark, Icon } from '../components/AppShell'
 
 const features = [
-  {
-    title: 'Works Without Internet',
-    desc: 'Teachers mark attendance offline — records queue locally and sync automatically the moment connectivity returns.',
-  },
-  {
-    title: 'Role-Based Access',
-    desc: 'Teachers, school admins and the Angaza team each see exactly what their role needs — nothing more.',
-  },
-  {
-    title: 'AI-Powered Insights',
-    desc: 'Generate plain-language attendance summaries, risk predictions and exam eligibility checks in seconds.',
-  },
-  {
-    title: 'Instant Parent Alerts',
-    desc: 'SMS to guardians on every absence or when attendance drops below the warning and exam lines — no smartphone needed on their end.',
-  },
+  { icon: 'offline', title: 'Works offline', desc: 'Mark the register with no signal. It syncs later.', tone: 'blue' },
+  { icon: 'sms', title: 'Parents get an SMS', desc: 'Any phone, in English or Kiswahili.', tone: 'teal' },
+  { icon: 'spark', title: 'Early warning', desc: 'AI summaries and risk prediction for admins.', tone: 'mist' },
+  { icon: 'shield', title: 'Right access', desc: 'Teachers, admins and Angaza each see their part.', tone: 'slate' },
 ]
 
 const accountSteps = [
-  {
-    title: 'Angaza adds schools and their admins',
-    desc: 'From the network overview, the Angaza team adds a school and creates its admin login.',
-  },
-  {
-    title: 'The school admin adds teachers',
-    desc: 'From the Classes page the admin creates a teacher login and gives them a temporary password.',
-  },
-  {
-    title: 'Teachers sign in and set a password',
-    desc: 'On first sign-in the teacher chooses their own password, then marks the register for their class.',
-  },
-  {
-    title: 'Guardians get SMS, no login',
-    desc: 'Parents and guardians need no account or smartphone. They receive texts on the phone number the school saved.',
-  },
+  { title: 'Angaza', desc: 'adds a school and its admin.' },
+  { title: 'The admin', desc: 'adds the teachers.' },
+  { title: 'Teachers', desc: 'sign in and mark the register.' },
+  { title: 'Guardians', desc: 'get texts, no login needed.' },
 ]
 
 export default function Home() {
@@ -59,46 +35,50 @@ export default function Home() {
 
       <section className="home-hero">
         <div className="home-hero-text">
-          <h1>Attendance tracking built for schools without reliable internet</h1>
-          <p>
-            Offline-first, AI-assisted, and built specifically for rural Kenyan schools —
-            take attendance with no connection, get instant insights, keep parents informed.
-          </p>
+          <span className="home-kicker">For rural schools in Kenya</span>
+          <h1>Every child counted, even without internet</h1>
+          <p>Take the register offline, keep parents informed and spot students at risk early.</p>
           <button onClick={() => navigate('/login')} className="btn btn-accent">
             Sign In to Get Started
           </button>
         </div>
-        <div className="home-hero-art" aria-hidden="true">
-          <Ring value={0.75} label="✓" caption="works offline" size={220} />
+        <div className="home-hero-photo">
+          <img src="/home-students.webp" alt="Two students working together on a laptop in class" width="900" height="1012" />
+          <div className="home-roll" aria-hidden="true">
+            <span className="home-roll-label">Form 2 North · Today</span>
+            <strong>34 of 36 present</strong>
+            <span className="home-roll-sync">Saved offline · syncs when back online</span>
+          </div>
         </div>
       </section>
 
       <section className="home-features">
         {features.map((f) => (
-          <div key={f.title} className="card home-feature-card">
+          <div key={f.title} className={`home-feature home-feature-${f.tone}`}>
+            <span className="home-feature-icon"><Icon name={f.icon} size={22} /></span>
             <h3>{f.title}</h3>
             <p>{f.desc}</p>
           </div>
         ))}
       </section>
 
-      <section className="card home-steps">
-        <h2>How accounts work</h2>
-        <p className="subtext" style={{ margin: 0 }}>
-          There is no sign-up page. Every login is created for a person by the level above them.
-        </p>
-        <ol className="step-list">
-          {accountSteps.map((s) => (
-            <li key={s.title}>
-              <strong>{s.title}</strong>
-              <p>{s.desc}</p>
-            </li>
-          ))}
-        </ol>
+      <section className="home-band">
+        <img src="/home-angaza.webp" alt="An Angaza Center facilitator helping students at their laptops" width="800" height="800" />
+        <div className="home-band-text">
+          <h2>How accounts work</h2>
+          <p className="subtext" style={{ margin: 0 }}>No sign-up page. Each login is made by the level above.</p>
+          <ol className="step-list">
+            {accountSteps.map((s) => (
+              <li key={s.title}>
+                <p><strong>{s.title}</strong> {s.desc}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
       </section>
 
       <footer className="home-footer">
-        <p>Need an account? Ask your school administrator. Accounts are issued, not self-registered.</p>
+        <p>Need an account? Ask your school administrator.</p>
       </footer>
     </div>
   )

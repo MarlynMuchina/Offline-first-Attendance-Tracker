@@ -10,7 +10,7 @@ export default defineConfig({
       workbox: {
         // The font is bundled, so nothing on the page waits on another site
         // and the app opens offline exactly as it does online.
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2}'],
       },
       manifest: {
         name: 'Student Attendance Tracker',
