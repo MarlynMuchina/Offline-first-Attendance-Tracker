@@ -120,6 +120,13 @@ export default function Login() {
           <span className="tag">SMS to guardians</span>
           <span className="tag">AI summaries</span>
         </div>
+        <img
+          className="auth-photo"
+          src="/login-class.webp"
+          alt="A full class of students working at laptops"
+          width="900"
+          height="487"
+        />
       </div>
     </section>
   )
