@@ -1306,6 +1306,14 @@ td {
   max-width: 440px;
 }
 
+.auth-photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 8px;
+  border-radius: 24px;
+}
+
 .tags {
   display: flex;
   flex-wrap: wrap;
@@ -1745,6 +1753,11 @@ td {
 
   .auth-side {
     border-radius: 0 0 28px 28px;
+  }
+
+  /* On a phone the sign-in form comes first; the photo would push it down. */
+  .auth-photo {
+    display: none;
   }
 
   .auth-side h1, .home-hero h1 {
