@@ -13,6 +13,9 @@ import { greetingFor, formatDay } from '../lib/display'
 import { reasonsFor, absencesToFollowUp, FOLLOW_UP_DAYS } from '../lib/reasons'
 import { fetchClassAttendance } from '../lib/classAttendance'
 import AppShell, { Ring, LoadingScreen } from '../components/AppShell'
+import StudentProfile from '../components/StudentProfile'
+import { mergeMarks } from '../lib/studentProfile'
+import { getChronicThreshold, getTermStart } from '../lib/settings'
 
 const client = generateClient()
 
@@ -72,6 +75,8 @@ export default function Teacher() {
 
   const [teacherName, setTeacherName] = useState('')
   const [myClasses, setMyClasses] = useState([])
+  // { student, records, range, note } for the student whose attendance is open
+  const [profile, setProfile] = useState(null)
 
   const loadStudents = useCallback(async (resolvedClassId) => {
     try {
@@ -300,6 +305,32 @@ export default function Teacher() {
     syncPendingAttendance().then(() => loadQueue(classIdRef.current))
   }
 
+  // A student's attendance since the start of term (or of the school year,
+  // which in Kenya is the calendar year): the server's records plus any
+  // marks still on this device. Offline, only this device's marks.
+  async function openProfile(student) {
+    const range = { startDate: getTermStart() || `${today().slice(0, 4)}-01-01`, endDate: today() }
+    setProfile({ student, records: [], range, note: '', loading: true })
+    const local = await db.attendanceQueue
+      .where('class_id')
+      .equals(classId)
+      .and((r) => r.student_id === student.id && r.date >= range.startDate)
+      .toArray()
+    let remote = []
+    let note = ''
+    try {
+      remote = await fromServer(
+        () => fetchClassAttendance((request) => client.graphql(request), { classId, ...range }),
+        15000
+      )
+    } catch {
+      note = 'Offline: showing only the marks saved on this phone. Open it again online for the full record.'
+    }
+    setProfile((current) => current?.student.id === student.id
+      ? { student, records: mergeMarks(remote, local, student.id), range, note, loading: false }
+      : current)
+  }
+
   async function markAllPresent() {
     for (const s of students) {
       await markStatus(s.id, 'PRESENT')
@@ -461,7 +492,11 @@ export default function Teacher() {
                 const studentName = `${s.first_name} ${s.last_name}`
                 return (
                   <tr key={s.id}>
-                    <td style={{ fontWeight: 600 }}>{studentName}</td>
+                    <td style={{ fontWeight: 600 }}>
+                      <button type="button" className="link-button" onClick={() => openProfile(s)} title="See this student's attendance">
+                        {studentName}
+                      </button>
+                    </td>
                     <td>
                       <div className="mark-group" role="radiogroup" aria-label={`Attendance for ${studentName}`}>
                         {MARK_OPTIONS.map(({ status, label }) => (
@@ -553,6 +588,19 @@ export default function Teacher() {
           </div>
         )}
       </section>
+      {profile && (
+        <StudentProfile
+          student={profile.student}
+          records={profile.records}
+          className={className}
+          threshold={getChronicThreshold()}
+          range={profile.range}
+          note={profile.note}
+          loading={profile.loading}
+          showGuardian={false}
+          onClose={() => setProfile(null)}
+        />
+      )}
     </AppShell>
   )
 }

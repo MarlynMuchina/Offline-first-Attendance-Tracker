@@ -63,3 +63,12 @@ function csvCell(value) {
 export function toCsv(header, rows) {
   return [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n') + '\r\n'
 }
+
+// One student's marks from the server and from this device, one per day.
+// A mark on the device wins: it may be newer and not yet synced.
+export function mergeMarks(remote, local, studentId) {
+  const byDate = new Map()
+  for (const r of remote) if (r.student_id === studentId) byDate.set(r.date, r)
+  for (const r of local) if (r.student_id === studentId) byDate.set(r.date, r)
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
+}
