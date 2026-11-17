@@ -19,8 +19,9 @@ function reasonText(record) {
  * One student's attendance over the dashboard's dates: rate, counts, a
  * Monday-to-Friday calendar, reasons, risk and guardian SMS settings.
  * Drawn from data the dashboard already has, so it opens offline too.
+ * Teachers see the same view without the guardian's number or risk.
  */
-export default function StudentProfile({ student, records, className, risk, threshold, range, onClose }) {
+export default function StudentProfile({ student, records, className, risk, threshold, range, onClose, showGuardian = true, note = '', loading = false }) {
   const closeRef = useRef(null)
   const p = studentProfile(records, student.id)
   const name = `${student.first_name} ${student.last_name}`
@@ -53,8 +54,11 @@ export default function StudentProfile({ student, records, className, risk, thre
           </div>
           <button ref={closeRef} onClick={onClose} className="btn-small">Close</button>
         </div>
+        {note && <p className="notice" style={{ margin: '0 0 14px' }}>{note}</p>}
 
-        {p.total === 0 ? (
+        {loading ? (
+          <p className="subtext">Loading attendance…</p>
+        ) : p.total === 0 ? (
           <p className="subtext">No attendance marked for this student in these dates.</p>
         ) : (
           <>
@@ -75,10 +79,10 @@ export default function StudentProfile({ student, records, className, risk, thre
                     {risk.risk_score !== null && risk.risk_score !== undefined ? ` (${Math.round(risk.risk_score * 100)}%)` : ''}
                   </span>
                 )}
-                <span>
+                {showGuardian && <span>
                   Guardian: {student.guardian_phone || 'no number saved'}
                   {student.guardian_phone && ` · SMS ${student.sms_preference === 'EVERY_ABSENCE' ? 'on every absence' : 'at the warning lines'}`}
-                </span>
+                </span>}
               </div>
             </div>
 

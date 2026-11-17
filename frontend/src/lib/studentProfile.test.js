@@ -1,4 +1,4 @@
-import { studentProfile, toCsv } from './studentProfile.js'
+import { studentProfile, toCsv, mergeMarks } from './studentProfile.js'
 
 describe('studentProfile', () => {
   const records = [
@@ -43,5 +43,17 @@ describe('toCsv', () => {
 
   it('stops cells being read as formulas', () => {
     expect(toCsv(['A'], [['=1+1']])).toBe("A\r\n'=1+1\r\n")
+  })
+})
+
+describe('mergeMarks', () => {
+  it("keeps one mark per day for the student, preferring the device's", () => {
+    const remote = [
+      { student_id: 'S1', date: '2026-11-03', status: 'PRESENT' },
+      { student_id: 'S1', date: '2026-11-04', status: 'PRESENT' },
+      { student_id: 'S2', date: '2026-11-04', status: 'ABSENT' },
+    ]
+    const local = [{ student_id: 'S1', date: '2026-11-04', status: 'ABSENT', sync_status: 'PENDING' }]
+    expect(mergeMarks(remote, local, 'S1').map((r) => r.status)).toEqual(['PRESENT', 'ABSENT'])
   })
 })
