@@ -1162,6 +1162,15 @@ td {
   color: var(--muted);
 }
 
+/* One plain sentence above each chart (lib/takeaways.js). */
+.chart-takeaway {
+  margin: -4px 0 14px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
 /* ---------- Register (teacher) ---------- */
 
 .reason-pick {
