@@ -18,6 +18,7 @@ import StudentProfile from '../components/StudentProfile'
 import { toCsv } from '../lib/studentProfile'
 import { summarizeReasons } from '../lib/reasons'
 import { ALL_CLASSES, classBreakdown, mapLimited } from '../lib/schoolOverview'
+import { trendTakeaway, weekdayTakeaway, splitTakeaway, rankTakeaway } from '../lib/takeaways'
 import AppShell, { ADMIN_NAV, Ring, LoadingScreen } from '../components/AppShell'
 
 const client = generateClient()
@@ -858,6 +859,9 @@ useEffect(() => {
       <div className="card-grid">
         <section className="card">
           <h2>Attendance trend</h2>
+          {stats.weekly.length > 0 && (
+            <p className="chart-takeaway">{trendTakeaway(stats.weekly, (w) => `week of ${shortDay(w)}`)}</p>
+          )}
           {stats.weekly.length === 0 ? (
             <p className="subtext">No attendance recorded in this range.</p>
           ) : (
@@ -933,6 +937,9 @@ useEffect(() => {
       {byClass && (
         <section className="card">
           <h2>Classes compared <span className="count">({byClass.length})</span></h2>
+          <p className="chart-takeaway">
+            {rankTakeaway(byClass.map((c) => ({ label: c.name, value: c.rate })), getChronicThreshold(), 'class')}
+          </p>
           <RankBars
             title="Average attendance by class"
             rows={byClass.map((c) => ({ key: c.id, label: c.name, value: c.rate }))}
@@ -984,6 +991,7 @@ useEffect(() => {
         <div className="card-grid">
           <section className="card">
             <h2>Attendance by day of the week</h2>
+            <p className="chart-takeaway">{weekdayTakeaway(stats.weekdays)}</p>
             <ColumnChart
               title="Attendance by day of the week"
               rows={stats.weekdays.map((d) => ({
@@ -1001,6 +1009,7 @@ useEffect(() => {
 
           <section className="card">
             <h2>Present, late and absent</h2>
+            <p className="chart-takeaway">{splitTakeaway(stats.split)}</p>
             <SplitBar
               title="Present, late and absent"
               segments={stats.split.map((x) => ({

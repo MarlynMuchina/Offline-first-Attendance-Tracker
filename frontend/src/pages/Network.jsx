@@ -10,6 +10,7 @@ import SchoolAdmins from '../components/SchoolAdmins'
 import AppShell, { Ring } from '../components/AppShell'
 import { greetingFor, formatDay, weeklyRates } from '../lib/display'
 import { TrendChart, RankBars } from '../components/Charts'
+import { trendTakeaway, rankTakeaway } from '../lib/takeaways'
 import SchoolMap from '../components/SchoolMap'
 
 const client = generateClient()
@@ -241,6 +242,9 @@ export default function Network() {
           <div className="card-grid">
             <section className="card">
               <h2>Attendance by school</h2>
+              <p className="chart-takeaway">
+                {rankTakeaway(stats.schools.map((s) => ({ label: schoolName(s.id), value: s.rate })), warningLine, 'school')}
+              </p>
               <RankBars
                 title="Attendance by school"
                 rows={stats.schools.map((s) => ({ key: s.id, label: schoolName(s.id), value: s.rate }))}
@@ -252,6 +256,11 @@ export default function Network() {
             </section>
             <section className="card">
               <h2>Network trend</h2>
+              {stats.weekly.length > 0 && (
+                <p className="chart-takeaway">
+                  {trendTakeaway(stats.weekly, (w) => `week of ${formatDay(w).replace(/ \d{4}$/, '')}`)}
+                </p>
+              )}
               {stats.weekly.length === 0 ? (
                 <p className="subtext">No attendance recorded in this range.</p>
               ) : (
