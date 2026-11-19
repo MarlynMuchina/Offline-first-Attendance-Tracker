@@ -1,0 +1,13 @@
+{
+  "name": "link-google-account-function",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": { "test": "jest" },
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.600.0"
+  },
+  "devDependencies": {
+    "aws-sdk-client-mock": "^4.1.0",
+    "jest": "^30.5.1"
+  }
+}
