@@ -1012,6 +1012,31 @@ td {
   .school-map { height: 320px; }
 }
 
+.auth-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.auth-or::before,
+.auth-or::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--line);
+}
+
+.btn-google {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--ink);
+  border-color: var(--field-line);
+  background: var(--card);
+}
+
 /* ---------- Student profile (components/StudentProfile.jsx) ---------- */
 
 .link-button {
